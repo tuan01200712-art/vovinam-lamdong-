@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-be-vietnam);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-belt-blue: var(--belt-blue);
+  --color-belt-yellow: var(--belt-yellow);
+  --color-belt-red: var(--belt-red);
+  --color-belt-white: var(--belt-white);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Tông xanh lam của võ phục Vovinam làm màu chủ đạo. */
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.97 0.01 250);
+  --foreground: oklch(0.2 0.03 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.03 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.03 260);
+  --primary: oklch(0.45 0.17 258);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.95 0.02 255);
+  --secondary-foreground: oklch(0.3 0.08 258);
+  --muted: oklch(0.96 0.01 255);
+  --muted-foreground: oklch(0.5 0.03 260);
+  --accent: oklch(0.95 0.02 255);
+  --accent-foreground: oklch(0.3 0.08 258);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.015 255);
+  --input: oklch(0.91 0.015 255);
+  --ring: oklch(0.6 0.12 258);
+  --success: oklch(0.55 0.14 155);
+  --success-foreground: oklch(0.985 0 0);
+  --belt-blue: oklch(0.48 0.17 258);
+  --belt-yellow: oklch(0.88 0.17 95);
+  --belt-red: oklch(0.58 0.22 27);
+  --belt-white: oklch(0.98 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
