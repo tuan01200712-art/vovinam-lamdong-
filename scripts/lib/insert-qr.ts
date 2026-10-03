@@ -5,10 +5,21 @@ import path from "node:path/posix";
 
 import JSZip from "jszip";
 
+import {
+  DRAWINGML_NS,
+  REL_NS,
+  SPREADSHEET_DRAWING_NS,
+  attrs,
+  drawingOf,
+  findPart,
+  listSheets,
+  parseRels,
+  readPart,
+  relsOf,
+  relsPathOf,
+  resolveTarget,
+} from "./ooxml";
 import type { QrPlacement } from "./parse-card";
-
-const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-const DRAWINGML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
 export async function insertQrImage(
   xlsx: Buffer,
@@ -17,28 +28,39 @@ export async function insertQrImage(
   at: QrPlacement,
 ): Promise<Buffer> {
   const zip = await JSZip.loadAsync(xlsx);
-  const read = async (part: string) => {
-    const file = zip.file(part);
-    if (!file) throw new Error(`File Excel thiếu phần ${part}`);
-    return file.async("string");
-  };
 
   // workbook.xml → trang tính → drawing (lớp chứa ảnh) của trang đó.
-  const workbookXml = await read("xl/workbook.xml");
-  const sheet = [...workbookXml.matchAll(/<(?:\w+:)?sheet\b[^>]*>/g)]
-    .map((m) => attrs(m[0]))
-    .find((a) => unescapeXml(a.name ?? "") === sheetName);
-  const sheetRid = sheet && Object.entries(sheet).find(([k]) => /(^|:)id$/.test(k))?.[1];
-  if (!sheetRid) throw new Error(`Không thấy trang tính "${sheetName}"`);
-
-  const sheetPath = resolveRel("xl/workbook.xml", await read(relsPathOf("xl/workbook.xml")), sheetRid);
-  const sheetXml = await read(sheetPath);
-  const drawingRid = sheetXml.match(/<(?:\w+:)?drawing\b[^>]*?\b(?:\w+:)?id="([^"]+)"/)?.[1];
-  if (!drawingRid) {
+  const sheet = (await listSheets(zip)).find((s) => s.name === sheetName);
+  const sheetPart = sheet && findPart(zip, sheet.path);
+  if (!sheetPart) throw new Error(`Không thấy trang tính "${sheetName}"`);
+  const sheetPath = sheetPart.name;
+  const sheetXml = await sheetPart.async("string");
+  const drawing = await drawingOf(zip, sheetPath, sheetXml);
+  if (!drawing) {
     throw new Error("Trang tính chưa có ảnh nào (logo, ảnh thẻ), chưa hỗ trợ chèn QR vào mẫu này");
   }
-  const drawingPath = resolveRel(sheetPath, await read(relsPathOf(sheetPath)), drawingRid);
-  let drawingXml = await read(drawingPath);
+  const drawingPath = drawing.path;
+  // File lưu lỗi: trang tính trỏ tới lớp ảnh không còn tồn tại → tạo lại lớp ảnh rỗng ở đúng chỗ đó.
+  let drawingXml =
+    (await readPart(zip, drawingPath)) ??
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<xdr:wsDr xmlns:xdr="${SPREADSHEET_DRAWING_NS}" xmlns:a="${DRAWINGML_NS}"></xdr:wsDr>`;
+  if (!drawing.exists) await ensureContentTypeOverride(zip, drawingPath);
+  // Tên phần khác chữ hoa/thường so với đường dẫn khai báo: Excel vẫn mở được nhưng LibreOffice thì không.
+  // Sửa đường dẫn cho khớp tên thật.
+  if (drawing.exists && drawing.target !== drawingPath) {
+    const sheetRels = findPart(zip, relsPathOf(sheetPath));
+    if (sheetRels) {
+      const relative = path.relative(path.dirname(sheetPath), drawingPath);
+      const xml = await sheetRels.async("string");
+      zip.file(
+        sheetRels.name,
+        xml.replace(/<(?:\w+:)?Relationship\b[^>]*>/g, (tag) =>
+          attrs(tag).Id === drawing.rid ? tag.replace(/Target="[^"]*"/, `Target="${relative}"`) : tag,
+        ),
+      );
+    }
+  }
 
   // 0. Xoá chữ "MQR" để không lòi ra cạnh QR (mỗi phần mềm tính độ rộng cột hơi khác nhau).
   const markerCell = sheetXml.match(
@@ -57,9 +79,9 @@ export async function insertQrImage(
   zip.file(mediaPath, png);
 
   // 2. Khai báo quan hệ drawing → ảnh.
-  const drawingRelsPath = relsPathOf(drawingPath);
+  const drawingRelsPath = findPart(zip, relsPathOf(drawingPath))?.name ?? relsPathOf(drawingPath);
   let drawingRels =
-    (await zip.file(drawingRelsPath)?.async("string")) ??
+    (await readPart(zip, drawingRelsPath)) ??
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
   const usedIds = new Set(parseRels(drawingRels).map((r) => r.Id));
   let k = 1;
@@ -73,7 +95,7 @@ export async function insertQrImage(
   zip.file(drawingRelsPath, drawingRels);
 
   // 3. Đăng ký kiểu file .png nếu file chưa có ảnh png nào.
-  let contentTypes = await read("[Content_Types].xml");
+  let contentTypes = (await readPart(zip, "[Content_Types].xml")) ?? "";
   if (!/Extension="png"/i.test(contentTypes)) {
     contentTypes = contentTypes.replace(
       "</Types>",
@@ -114,43 +136,26 @@ export async function insertQrImage(
 
 /** sharedStrings.xml ghi tổng số ô dùng chuỗi chung; bớt một ô thì giảm một cho khớp. */
 async function decrementSharedStringCount(zip: JSZip) {
-  const relsXml = await zip.file(relsPathOf("xl/workbook.xml"))?.async("string");
-  const rel = relsXml && parseRels(relsXml).find((r) => r.Type?.endsWith("/sharedStrings"));
-  if (!rel) return;
-  const sstPath = resolveRel("xl/workbook.xml", relsXml, rel.Id);
-  const sst = await zip.file(sstPath)?.async("string");
-  if (!sst) return;
+  const rel = (await relsOf(zip, "xl/workbook.xml")).find((r) => r.Type?.endsWith("/sharedStrings"));
+  if (!rel?.Target) return;
+  const sstPart = findPart(zip, resolveTarget("xl/workbook.xml", rel.Target));
+  if (!sstPart) return;
+  const sst = await sstPart.async("string");
   zip.file(
-    sstPath,
+    sstPart.name,
     sst.replace(/(<(?:\w+:)?sst\b[^>]*?\bcount=")(\d+)"/, (_, head: string, n: string) => `${head}${Math.max(0, Number(n) - 1)}"`),
   );
 }
 
-function relsPathOf(part: string): string {
-  return `${path.dirname(part)}/_rels/${path.basename(part)}.rels`;
-}
-
-function resolveRel(fromPart: string, relsXml: string, id: string): string {
-  const rel = parseRels(relsXml).find((r) => r.Id === id);
-  if (!rel?.Target) throw new Error(`Không thấy quan hệ ${id} của ${fromPart}`);
-  return rel.Target.startsWith("/")
-    ? rel.Target.slice(1)
-    : path.normalize(path.join(path.dirname(fromPart), rel.Target));
-}
-
-function parseRels(xml: string): Record<string, string>[] {
-  return [...xml.matchAll(/<(?:\w+:)?Relationship\b[^>]*>/g)].map((m) => attrs(m[0]));
-}
-
-function attrs(tag: string): Record<string, string> {
-  return Object.fromEntries([...tag.matchAll(/([\w:]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
-}
-
-function unescapeXml(s: string): string {
-  return s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&");
+/** Đăng ký kiểu nội dung cho một lớp ảnh vừa tạo lại. */
+async function ensureContentTypeOverride(zip: JSZip, part: string) {
+  const ct = (await readPart(zip, "[Content_Types].xml")) ?? "";
+  if (ct.toLowerCase().includes(`partname="/${part.toLowerCase()}"`)) return;
+  zip.file(
+    "[Content_Types].xml",
+    ct.replace(
+      "</Types>",
+      `<Override PartName="/${part}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`,
+    ),
+  );
 }
