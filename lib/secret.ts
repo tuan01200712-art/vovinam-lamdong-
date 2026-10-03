@@ -8,6 +8,9 @@ export type SecretValues = Partial<Record<PrivateField, string>>;
 /** Trình duyệt không có Web Crypto: thường do mở trang qua http thay vì https. */
 export class CryptoUnavailableError extends Error {}
 
+/** Chuẩn hoá mã xem giống hệt nhau lúc import và trên trình duyệt: bỏ khoảng trắng đầu/cuối, Unicode NFC. */
+export const normalizeViewCode = (code: string) => code.trim().normalize("NFC");
+
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 /** Ném lỗi nếu mã sai (AES-GCM không xác thực được). `slug` là dữ liệu xác thực kèm theo. */
@@ -15,7 +18,7 @@ export async function openSecret(blob: SecretBlob, code: string, slug: string): 
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new CryptoUnavailableError();
   const encoder = new TextEncoder();
-  const baseKey = await subtle.importKey("raw", encoder.encode(code.normalize("NFC")), "PBKDF2", false, [
+  const baseKey = await subtle.importKey("raw", encoder.encode(normalizeViewCode(code)), "PBKDF2", false, [
     "deriveKey",
   ]);
   const key = await subtle.deriveKey(

@@ -6,8 +6,10 @@
 // File gồm hai phần: mặt thẻ (phía trên) và phần "Tài liệu" (từ dòng "Tài liệu"
 // trở xuống: thông tin cá nhân, hồ sơ từng cấp đai, thành tích).
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 
 import type { BeltColor, Rank, Signer } from "../../lib/types";
+import { listSheets, readSheetImages, withoutDrawings, type CellPoint, type SheetImage } from "./ooxml";
 import { cleanText, formatDateUtc, parseDateVi, valueOrNull } from "./text";
 
 type Cell = { row: number; col: number; address: string; text: string };
@@ -151,7 +153,10 @@ const ROMAN: Record<string, number> = {
 
 export async function parseCard(data: Buffer): Promise<ParsedCard> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(data as unknown as ExcelJS.Buffer);
+  // Ảnh được đọc riêng từ zip (readSheetImages); ExcelJS chỉ đọc chữ trên bản đã bỏ lớp ảnh,
+  // vì nó crash ("reading 'anchors'") với file có lớp ảnh lệch chuẩn (WPS, macro, file lưu lỗi...).
+  const zip = await JSZip.loadAsync(data);
+  await wb.xlsx.load((await withoutDrawings(zip)) as unknown as ExcelJS.Buffer);
   const visible = wb.worksheets.filter((w) => w.state === "visible");
   const ws = visible[0] ?? wb.worksheets[0];
   if (!ws) throw new Error("File không có trang tính nào");
@@ -241,7 +246,12 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
   });
   if (ranks.length === 0) warnings.push("Không thấy khung đẳng cấp nào (Lam đai, Lam đai I cấp...)");
 
-  const photo = findPhoto(wb, ws, left, boxOf, warnings);
+  const sheetPath = (await listSheets(zip)).find((s) => s.name === ws.name)?.path;
+  const { images, problems } = sheetPath
+    ? await readSheetImages(zip, sheetPath)
+    : { images: [], problems: [`không tìm thấy phần XML của trang tính "${ws.name}"`] };
+  for (const p of problems) warnings.push(`Ảnh: ${p}`);
+  const photo = findPhoto(images, ws, left, boxOf, warnings);
 
   const qrMark = left.find((c) => QR_MARK.test(c.text));
   const qr = qrMark ? { marker: qrMark.address, ...placeQr(ws, boxOf(qrMark)) } : null;
@@ -460,7 +470,7 @@ function parseRank(title: Cell, inside: Cell[], warnings: string[]): Rank {
 }
 
 function findPhoto(
-  wb: ExcelJS.Workbook,
+  images: SheetImage[],
   ws: ExcelJS.Worksheet,
   left: Cell[],
   boxOf: (c: Cell) => Box,
@@ -473,19 +483,9 @@ function findPhoto(
   }
   // Ảnh thẻ là ảnh đặt đè lên ô "Ảnh 3x4". Logo ở chỗ khác nên không bị lấy nhầm.
   const markBox = boxOf(mark);
-  const hits = ws
-    .getImages()
-    .map((img) => {
-      const { tl, br } = img.range;
-      const box: Box = {
-        top: Math.floor(tl.nativeRow) + 1,
-        left: Math.floor(tl.nativeCol) + 1,
-        bottom: Math.floor(br?.nativeRow ?? tl.nativeRow) + 1,
-        right: Math.floor(br?.nativeCol ?? tl.nativeCol) + 1,
-      };
-      return { box, image: wb.getImage(Number(img.imageId)) };
-    })
-    .filter(({ box }) => overlaps(box, markBox))
+  const hits = images
+    .map((image) => ({ image, box: imageBox(ws, image) }))
+    .filter((h): h is { image: SheetImage; box: Box } => h.box !== null && overlaps(h.box, markBox))
     .sort((a, b) => area(b.box) - area(a.box));
 
   if (hits.length === 0) {
@@ -494,8 +494,29 @@ function findPhoto(
   }
   if (hits.length > 1) warnings.push(`Có ${hits.length} ảnh chồng lên ô ${mark.address}, lấy ảnh lớn nhất`);
   const { image } = hits[0];
-  if (!image.buffer) return null;
-  return { buffer: Buffer.from(image.buffer as unknown as Uint8Array), extension: image.extension };
+  return { buffer: image.buffer, extension: image.extension };
+}
+
+/** Vùng ô (đánh số từ 1) mà ảnh phủ lên, với cả ba kiểu neo: hai ô, một ô + kích thước, tuyệt đối. */
+function imageBox(ws: ExcelJS.Worksheet, img: SheetImage): Box | null {
+  let from: CellPoint | null = img.from;
+  let to: CellPoint | null = img.to;
+  if (!from && img.pos) from = advance(ws, { col: 0, colOff: 0, row: 0, rowOff: 0 }, img.pos.x, img.pos.y);
+  if (!from) return null;
+  if (!to && img.ext) to = advance(ws, from, img.ext.cx, img.ext.cy);
+  to ??= from;
+  return { top: from.row + 1, left: from.col + 1, bottom: to.row + 1, right: to.col + 1 };
+}
+
+/** Đi từ một điểm neo thêm dx, dy (EMU) theo độ rộng cột / chiều cao dòng thật của trang tính. */
+function advance(ws: ExcelJS.Worksheet, p: CellPoint, dx: number, dy: number): CellPoint {
+  let col = p.col;
+  let colOff = p.colOff + dx;
+  while (col < 16383 && colOff >= colWidthEmu(ws, col + 1)) colOff -= colWidthEmu(ws, ++col);
+  let row = p.row;
+  let rowOff = p.rowOff + dy;
+  while (row < 1048575 && rowOff >= rowHeightEmu(ws, row + 1)) rowOff -= rowHeightEmu(ws, ++row);
+  return { col, colOff, row, rowOff };
 }
 
 // ---- Kích thước ô (để đặt QR vừa khít vùng "MQR") ----
@@ -503,16 +524,20 @@ function findPhoto(
 const EMU_PER_PX = 9525;
 const EMU_PER_PT = 12700;
 
+/** Độ rộng cột (đánh số từ 1) theo EMU. Công thức đổi "số ký tự" sang pixel của Excel (ký tự chuẩn 7px). */
+function colWidthEmu(ws: ExcelJS.Worksheet, col: number): number {
+  const w = ws.getColumn(col).width ?? ws.properties.defaultColWidth;
+  const px = w ? Math.trunc(((256 * w + Math.trunc(128 / 7)) / 256) * 7) : 64;
+  return px * EMU_PER_PX;
+}
+
+function rowHeightEmu(ws: ExcelJS.Worksheet, row: number): number {
+  return (ws.getRow(row).height ?? ws.properties.defaultRowHeight ?? 15) * EMU_PER_PT;
+}
+
 function placeQr(ws: ExcelJS.Worksheet, box: Box): Omit<QrPlacement, "marker"> {
-  const cols = range(box.left, box.right).map((c) => {
-    const w = ws.getColumn(c).width ?? ws.properties.defaultColWidth;
-    // Công thức đổi "số ký tự" sang pixel của Excel (độ rộng ký tự chuẩn 7px).
-    const px = w ? Math.trunc(((256 * w + Math.trunc(128 / 7)) / 256) * 7) : 64;
-    return px * EMU_PER_PX;
-  });
-  const rows = range(box.top, box.bottom).map(
-    (r) => (ws.getRow(r).height ?? ws.properties.defaultRowHeight ?? 15) * EMU_PER_PT,
-  );
+  const cols = range(box.left, box.right).map((c) => colWidthEmu(ws, c));
+  const rows = range(box.top, box.bottom).map((r) => rowHeightEmu(ws, r));
   const width = cols.reduce((a, b) => a + b, 0);
   const height = rows.reduce((a, b) => a + b, 0);
   const size = Math.round(Math.min(width, height) * 0.92);

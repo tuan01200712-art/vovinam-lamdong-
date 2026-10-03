@@ -2,7 +2,7 @@
 // Trình duyệt mở lại bằng lib/secret.ts với đúng thuật toán và tham số này.
 import crypto from "node:crypto";
 
-import type { SecretValues } from "../../lib/secret";
+import { normalizeViewCode, type SecretValues } from "../../lib/secret";
 import type { SecretBlob } from "../../lib/types";
 
 /** Đủ chậm để dò mã trên máy tính tốn kém, vẫn mở trong ~1 giây trên điện thoại. */
@@ -14,7 +14,7 @@ export type SealKey = { key: Buffer; salt: Buffer };
 /** Chỉ dẫn xuất khoá một lần cho cả lượt import (cùng một mã xem cho mọi thẻ). */
 export function deriveSealKey(code: string): SealKey {
   const salt = crypto.randomBytes(16);
-  const key = crypto.pbkdf2Sync(code.normalize("NFC"), salt, PBKDF2_ITERATIONS, 32, "sha256");
+  const key = crypto.pbkdf2Sync(normalizeViewCode(code), salt, PBKDF2_ITERATIONS, 32, "sha256");
   return { key, salt };
 }
 

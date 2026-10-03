@@ -99,6 +99,7 @@ Ai cầm thẻ (hoặc ảnh chụp thẻ) đều mở được trang, và phầ
 ### Con mắt 👁: xem đầy đủ bằng mã xem
 
 Đặt `VIEW_CODE` trong `.env` (ít nhất 8 ký tự, nên trộn chữ và số), rồi chạy `npm run import`.
+Mã có dấu `#` hoặc dấu cách thì đặt trong ngoặc kép: `VIEW_CODE="Abc#2026"`.
 Mục "Hồ sơ môn sinh" sẽ có nút **Xem đầy đủ**: bấm vào, nhập mã xem, các trường đang che hiện đầy đủ;
 bấm **Ẩn** để che lại. Có tuỳ chọn "Nhớ mã trên máy này" cho HLV phải quét nhiều thẻ.
 

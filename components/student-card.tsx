@@ -8,7 +8,7 @@ import { RecordSection, type RecordRow } from "@/components/record-section";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatDateVi } from "@/lib/format";
-import { site, type PrivateField } from "@/lib/site";
+import { site } from "@/lib/site";
 import { currentRank, type Student } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
