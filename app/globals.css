@@ -57,7 +57,7 @@
   --border: oklch(0.91 0.015 255);
   --input: oklch(0.91 0.015 255);
   --ring: oklch(0.6 0.12 258);
-  --success: oklch(0.55 0.14 155);
+  --success: oklch(0.5 0.14 155);
   --success-foreground: oklch(0.985 0 0);
   --belt-blue: oklch(0.48 0.17 258);
   --belt-yellow: oklch(0.88 0.17 95);

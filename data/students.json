@@ -70,11 +70,18 @@
       "trainingSince": "Từ tháng 6/2021",
       "bloodType": "O",
       "address": "•••, xã Mẫu, tỉnh Lâm Đồng",
-      "idNumber": "••••••••0000",
+      "idNumber": "••••••••••••",
       "phone": "•••• ••• 000",
       "achievements": [
         "Huy chương vàng giải mẫu 2026"
       ],
+      "secret": {
+        "alg": "PBKDF2-SHA256/AES-256-GCM",
+        "iter": 600000,
+        "salt": "M0/DmKLeY7umfXNfE6qM1A==",
+        "iv": "aR+ULpEYd+iig/Gn",
+        "data": "Ul+RtNT9wGGhmSKxJ+T2EVkx42sC2WjznEux15Wi/k7EUknrNSFC6IoFnN5Ru7C0fBPOnP960SM65BqZHH7FmLXx9g4YViSsAgKfrdA5CCnjmCfDS+qC6hhkiEsQTL5g3Bw3RS6dlzQ87e0ShMojvDunu0DVXSlv1WQ="
+      },
       "issuedAt": "Lâm Đồng, năm 2026",
       "signer": {
         "onBehalfOf": "TM. BAN CHẤP HÀNH",

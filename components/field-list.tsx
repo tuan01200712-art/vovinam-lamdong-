@@ -36,7 +36,7 @@ export function FieldList({
   return (
     <dl
       className={cn(
-        "grid grid-cols-[minmax(6.5rem,38%)_1fr] gap-x-3 gap-y-2 text-sm leading-snug",
+        "grid grid-cols-[minmax(6.5rem,38%)_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm leading-snug",
         className,
       )}
     >
@@ -53,7 +53,7 @@ export function FieldList({
 }
 
 function Value({ value }: { value: string | null | undefined }) {
-  if (!value) return <span className="text-muted-foreground/50 font-normal">—</span>;
+  if (!value) return <span className="text-muted-foreground font-normal">—</span>;
   return (
     <>
       {value}

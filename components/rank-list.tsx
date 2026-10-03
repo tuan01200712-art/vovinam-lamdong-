@@ -35,13 +35,19 @@ export function RankList({ ranks }: { ranks: Rank[] }) {
               achieved ? "bg-secondary/50" : "border-dashed",
             )}
           >
-            <AccordionTrigger className="items-center py-3 hover:no-underline">
+            <AccordionTrigger className="min-w-0 items-center py-3 hover:no-underline">
               {/* Bọc span: trigger xoay mọi svg con trực tiếp, chỉ mũi tên được xoay. */}
-              <span className="flex min-w-0 flex-1 items-center gap-3">
-                <BeltIcon color={rank.color} stripes={rank.stripes} muted={!achieved} />
+              {/* Màn hẹp: tên đai xuống dòng, nhãn trạng thái rơi xuống dưới, không cắt mất chữ. */}
+              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                <BeltIcon
+                  color={rank.color}
+                  stripes={rank.stripes}
+                  muted={!achieved}
+                  className="h-3.5 w-11 sm:h-4 sm:w-14"
+                />
                 <span
                   className={cn(
-                    "min-w-0 truncate text-[15px]",
+                    "min-w-0 text-[15px] break-words",
                     achieved ? "font-semibold" : "text-muted-foreground font-normal",
                   )}
                 >

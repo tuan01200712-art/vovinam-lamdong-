@@ -12,9 +12,9 @@ const privacy: Record<PrivateField, Visibility> = {
   bloodType: "show",
   /** "mask": giữ 3 số cuối, ví dụ "•••• ••• 678" */
   phone: "mask",
-  /** "mask": giữ 4 số cuối, ví dụ "••••••••1234" */
+  /** "mask": che toàn bộ số, chỉ cho biết đã khai (6 số đầu CCCD suy ra được từ tỉnh + năm sinh trên trang) */
   idNumber: "mask",
-  /** "mask": chỉ giữ xã/phường và tỉnh, ví dụ "•••, xã Tân Hà, tỉnh Lâm Đồng" */
+  /** "mask": chỉ giữ xã/phường và tỉnh khi nhận ra chắc chắn, ví dụ "•••, xã Tân Hà, tỉnh Lâm Đồng" */
   address: "mask",
 };
 

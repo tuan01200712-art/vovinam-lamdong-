@@ -1,14 +1,14 @@
 import Image from "next/image";
-import { IdCard, ShieldCheck, Stamp, Trophy, UserRound } from "lucide-react";
+import { Stamp, Trophy, UserRound } from "lucide-react";
 
 import { BeltIcon } from "@/components/belt-icon";
-import { FieldList, SectionHeading, type Field } from "@/components/field-list";
+import { FieldList, SectionHeading } from "@/components/field-list";
 import { RankList } from "@/components/rank-list";
+import { RecordSection, type RecordRow } from "@/components/record-section";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatDateVi } from "@/lib/format";
-import { isMasked } from "@/lib/privacy";
-import { site } from "@/lib/site";
+import { site, type PrivateField } from "@/lib/site";
 import { currentRank, type Student } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -20,12 +20,13 @@ export function StudentCard({ student, updatedAt }: { student: Student; updatedA
       <NationalHeader />
       <CardBanner />
 
-      <div className="grid md:grid-cols-[18rem_1fr] md:grid-rows-[auto_1fr]">
+      {/* minmax(0,1fr): cột không được nở rộng hơn thẻ theo nội dung dài (thẻ có overflow-hidden). */}
+      <div className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[auto_1fr]">
         <Profile student={student} className="md:col-start-1 md:row-start-1 md:border-r" />
 
         <div className="divide-y border-t md:col-start-2 md:row-span-2 md:row-start-1 md:border-t-0">
           <RanksSection student={student} />
-          <RecordSection student={student} />
+          <RecordSection rows={recordRows(student)} secret={student.secret} slug={student.slug} />
           <AchievementsSection achievements={student.achievements} />
         </div>
 
@@ -166,32 +167,16 @@ function RanksSection({ student }: { student: Student }) {
   );
 }
 
-function RecordSection({ student }: { student: Student }) {
-  // Trường đặt "hide" trong site.privacy thì bỏ hẳn dòng, không hiện "—" gây hiểu nhầm là chưa khai.
-  const personal: [Field, keyof typeof site.privacy | null][] = [
-    [["Thời gian tham gia tập luyện", student.trainingSince], null],
-    [["Nhóm máu", student.bloodType], "bloodType"],
-    [["Thường trú", student.address], "address"],
-    [["CCCD", student.idNumber], "idNumber"],
-    [["Điện thoại", student.phone], "phone"],
+/** Dựng các dòng "Hồ sơ môn sinh"; trường đặt "hide" bị bỏ hẳn, không hiện "—" gây hiểu nhầm là chưa khai. */
+function recordRows(student: Student): RecordRow[] {
+  const rows: RecordRow[] = [
+    { label: "Thời gian tham gia tập luyện", value: student.trainingSince },
+    { label: "Nhóm máu", value: student.bloodType, field: "bloodType" },
+    { label: "Thường trú", value: student.address, field: "address" },
+    { label: "CCCD", value: student.idNumber, field: "idNumber" },
+    { label: "Điện thoại", value: student.phone, field: "phone" },
   ];
-  const fields = personal
-    .filter(([, key]) => !key || site.privacy[key] !== "hide")
-    .map(([field]) => field);
-  const anyMasked = fields.some(([, value]) => isMasked(value ?? null));
-
-  return (
-    <section className="space-y-3 px-4 py-5 sm:px-5">
-      <SectionHeading icon={IdCard}>Hồ sơ môn sinh</SectionHeading>
-      <FieldList fields={fields} />
-      {anyMasked && (
-        <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
-          <ShieldCheck aria-hidden className="mt-px size-3.5 shrink-0" />
-          Một số thông tin cá nhân được che bớt để bảo vệ môn sinh.
-        </p>
-      )}
-    </section>
-  );
+  return rows.filter(({ field }) => !field || site.privacy[field] !== "hide");
 }
 
 function AchievementsSection({ achievements }: { achievements: string[] }) {
