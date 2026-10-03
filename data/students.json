@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T11:13:16.739Z",
+  "generatedAt": "2026-10-03T11:19:53.656Z",
   "students": [
     {
       "slug": "r4qbyznvv3",
@@ -11,8 +11,8 @@
       "photo": "/photos/r4qbyznvv3.webp?v=fb96202d",
       "ranks": [
         {
-          "name": "Lam đai",
-          "color": "blue",
+          "name": "Hoàng Đai",
+          "color": "yellow",
           "stripes": 0,
           "examDate": "20/09/2026",
           "decisionNo": null,
@@ -76,9 +76,9 @@
       "secret": {
         "alg": "PBKDF2-SHA256/AES-256-GCM",
         "iter": 600000,
-        "salt": "Jz3V/xtvbzTBCQ2maahyDQ==",
-        "iv": "YjeiFOTYRObARVaR",
-        "data": "s/TBlJr/d0WJrnhohVwxF34iqtLO/adzrxi5uSMImvDCYGYcDW3jwJWxcpljXMjg5uKl8aw="
+        "salt": "gg0jH5P2biVJdx6m8Cqm5Q==",
+        "iv": "wvlZLpnrCYFZeLZU",
+        "data": "8+AKqFzwYKriixuwbD/my7ZD4wFReu2QNKRPmMxQdntmxnk0N4eEDtV9nwylR7m6Rp4j3EY="
       },
       "issuedAt": "Lâm Đồng, năm 2026",
       "signer": {
