@@ -7,7 +7,8 @@ import path from "node:path";
 
 import sharp from "sharp";
 
-import { currentRank, type Student, type StudentsFile } from "../lib/types";
+import { publicValue } from "../lib/privacy";
+import { currentRank, isAchieved, type Rank, type Student, type StudentsFile } from "../lib/types";
 import { parseCard, type ParsedCard } from "./lib/parse-card";
 import {
   INPUT_DIR,
@@ -129,7 +130,7 @@ async function main() {
 
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
   const reportPath = path.join(OUTPUT_DIR, "kiem-tra.html");
-  await fs.writeFile(reportPath, renderReport(rows, missing, now), "utf8");
+  await fs.writeFile(reportPath, renderReport(rows, students, missing, now), "utf8");
 
   // ---- Tóm tắt ----
   const withWarnings = rows.filter((r) => r.warnings.length);
@@ -164,6 +165,15 @@ function toStudent(r: Row): Student {
     // ?v= đổi khi ảnh đổi, để trình duyệt không giữ ảnh cũ trong cache.
     photo: r.photo ? `/photos/${r.slug}.webp?v=${sha256(r.photo).slice(0, 8)}` : null,
     ranks: r.card.ranks,
+    trainingSince: r.card.trainingSince,
+    // Che/ẩn ngay tại đây theo site.privacy: giá trị gốc không bao giờ vào students.json.
+    bloodType: publicValue("bloodType", r.card.personal.bloodType),
+    address: publicValue("address", r.card.personal.address),
+    idNumber: publicValue("idNumber", r.card.personal.idNumber),
+    phone: publicValue("phone", r.card.personal.phone),
+    achievements: r.card.achievements,
+    issuedAt: r.card.issuedAt,
+    signer: r.card.signer,
   };
 }
 
@@ -198,32 +208,62 @@ function flagDuplicates(
 const sha256 = (buf: Buffer) => crypto.createHash("sha256").update(buf).digest("hex");
 const rel = (p: string) => path.relative(ROOT, p) || ".";
 
-function renderReport(rows: Row[], missing: string[], generatedAt: string): string {
+function renderReport(rows: Row[], students: Student[], missing: string[], generatedAt: string): string {
+  const items = rows.map((row, i) => ({ row, student: students[i] }));
   // File có cảnh báo lên đầu.
-  const sorted = [...rows].sort(
-    (a, b) => Number(b.warnings.length > 0) - Number(a.warnings.length > 0) || a.file.name.localeCompare(b.file.name, "vi"),
+  items.sort(
+    (a, b) =>
+      Number(b.row.warnings.length > 0) - Number(a.row.warnings.length > 0) ||
+      a.row.file.name.localeCompare(b.row.file.name, "vi"),
   );
-  const cards = sorted
-    .map((r) => {
-      const rank = currentRank(r.card.ranks);
-      const img = r.photo
-        ? `<img src="data:image/webp;base64,${r.photo.toString("base64")}" alt="">`
+  const dl = (pairs: [string, string | null | undefined][]) =>
+    `<dl>${pairs.map(([k, v]) => `<dt>${k}</dt><dd>${v ? escapeHtml(v) : '<span class="empty">—</span>'}</dd>`).join("")}</dl>`;
+  const rankLine = (r: Rank) => {
+    const details = [
+      r.examDate && `thi ${r.examDate}`,
+      r.decisionNo && `QĐ CN ${r.decisionNo}`,
+      r.examiners.length > 0 && `GK ${r.examiners.join(", ")}`,
+      r.plan && `KH ${r.plan}`,
+      r.testDate && `kiểm tra ${r.testDate}`,
+      r.testPlace && `tại ${r.testPlace}`,
+      r.examinerDecision && `QĐ GK ${r.examinerDecision}`,
+      r.recognitionDecision && `QĐ công nhận ${r.recognitionDecision}`,
+      r.coach && `HLV ${r.coach}`,
+    ].filter(Boolean);
+    return `<li class="${isAchieved(r) ? "ok" : ""}"><b>${escapeHtml(r.name)}</b>${details.length ? `: ${escapeHtml(details.join(" · "))}` : ""}</li>`;
+  };
+
+  const cards = items
+    .map(({ row, student: s }) => {
+      const img = row.photo
+        ? `<img src="data:image/webp;base64,${row.photo.toString("base64")}" alt="">`
         : `<div class="nophoto">Không có ảnh</div>`;
-      const info = [
-        ["Năm sinh", r.card.birthYear?.toString()],
-        ["Đơn vị", r.card.unit],
-        ["Sinh hoạt tại", r.card.club],
-        ["Số thẻ", r.card.cardNo],
-        ["Đẳng cấp", rank?.name ?? "Chưa có"],
-      ]
-        .map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v ?? "—")}</dd>`)
-        .join("");
-      const warns = r.warnings.length
-        ? `<ul class="warn">${r.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`
+      const signer = s.signer && [s.signer.onBehalfOf, s.signer.role, s.signer.name].filter(Boolean).join(" · ");
+      const warns = row.warnings.length
+        ? `<ul class="warn">${row.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`
         : "";
-      return `<article class="${r.warnings.length ? "has-warn" : ""}">${img}<div>
-        <h2>${escapeHtml(r.card.fullName)}</h2><dl>${info}</dl>
-        <p class="file">${escapeHtml(r.file.name)} · /hv/${r.slug}/</p>${warns}</div></article>`;
+      return `<article class="${row.warnings.length ? "has-warn" : ""}">${img}<div class="body">
+        <h2>${escapeHtml(s.fullName)}</h2>
+        ${dl([
+          ["Năm sinh", s.birthYear?.toString()],
+          ["Đơn vị", s.unit],
+          ["Sinh hoạt tại", s.club],
+          ["Số thẻ", s.cardNo],
+          ["Đẳng cấp", currentRank(s.ranks)?.name ?? "Chưa có"],
+          ["Ký", signer],
+          ["Ngày cấp", s.issuedAt],
+        ])}
+        <h3>Tài liệu (đúng như sẽ hiện trên web)</h3>
+        ${dl([
+          ["Tham gia tập", s.trainingSince],
+          ["Nhóm máu", s.bloodType],
+          ["Thường trú", s.address],
+          ["CCCD", s.idNumber],
+          ["Điện thoại", s.phone],
+        ])}
+        <ul class="ranks">${s.ranks.map(rankLine).join("")}</ul>
+        <p class="ach">Thành tích: ${s.achievements.length ? escapeHtml(s.achievements.join(" | ")) : "chưa có"}</p>
+        <p class="file">${escapeHtml(row.file.name)} · /hv/${s.slug}/</p>${warns}</div></article>`;
     })
     .join("\n");
 
@@ -235,17 +275,23 @@ function renderReport(rows: Row[], missing: string[], generatedAt: string): stri
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kiểm tra dữ liệu import</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f4f6fb; color: #1b2235; }
-  h1 { margin: 0 0 4px; font-size: 22px; }
-  .meta { color: #5b6478; margin: 0 0 20px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
-  article { display: flex; gap: 14px; background: #fff; border: 1px solid #dde2ee; border-radius: 12px; padding: 12px; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #f4f6fb; color: #1b2235; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  .meta { color: #5b6478; margin: 0 0 16px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+  article { display: flex; gap: 12px; background: #fff; border: 1px solid #dde2ee; border-radius: 12px; padding: 12px; }
   article.has-warn { border-color: #e8a33d; box-shadow: 0 0 0 2px #fbe3bd; }
-  img, .nophoto { width: 96px; height: 128px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #e9ecf3; }
+  .body { min-width: 0; flex: 1; }
+  img, .nophoto { width: 90px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #e9ecf3; }
   .nophoto { display: grid; place-items: center; font-size: 12px; color: #8a92a6; text-align: center; }
   h2 { margin: 0 0 6px; font-size: 15px; }
+  h3 { margin: 10px 0 4px; font-size: 12px; color: #5b6478; text-transform: uppercase; letter-spacing: .04em; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 13px; }
-  dt { color: #5b6478; } dd { margin: 0; }
+  dt { color: #5b6478; } dd { margin: 0; overflow-wrap: anywhere; }
+  .empty { color: #b3b9c7; }
+  .ranks { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: #5b6478; }
+  .ranks li.ok { color: #1b2235; }
+  .ach { margin: 6px 0 0; font-size: 12px; }
   .file { font-size: 11px; color: #8a92a6; margin: 6px 0 0; word-break: break-all; }
   .warn { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: #a45a00; }
   .missing { background: #fff3e0; border: 1px solid #e8a33d; padding: 10px 14px; border-radius: 8px; }

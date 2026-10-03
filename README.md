@@ -5,7 +5,7 @@ Quét mã QR trên thẻ đẳng cấp → mở trang thông tin môn sinh trên
 ```
 input/*.xlsx (mỗi học viên 1 file, chung mẫu thẻ)
    │  npm run import
-   ├─► data/students.json      thông tin trên thẻ (không có phần "Tài liệu")
+   ├─► data/students.json      mặt thẻ + phần "Tài liệu" (thông tin cá nhân đã che theo cấu hình)
    ├─► data/registry.json      tên file → mã QR cố định
    ├─► public/photos/*.webp    ảnh 3x4 đã nén (~50 KB), đã xoá EXIF/GPS
    └─► output/kiem-tra.html    trang soát lỗi, chỉ xem trên máy
@@ -66,11 +66,35 @@ Giá trị được tìm **theo nhãn**, không theo toạ độ ô, nên file l
 | Khung `Lam đai` … `Lam đai III cấp` | `Ngày thi:`, `Số QĐ CN:`, tên dưới `Giám khảo chấm thi` |
 | Ô `Ảnh 3x4` | ảnh đặt đè lên ô này (logo ở chỗ khác nên không bị lấy nhầm) |
 | Ô `MQR` | chỗ đặt mã QR |
+| `Lâm Đồng, ngày … tháng … năm 2026` · `TM. BAN CHẤP HÀNH` · `CHỦ TỊCH` | ngày cấp và người ký (tên ở ô đầu tiên bên dưới chức danh) |
 
-Chuỗi chấm chừa chỗ (`…………`) được coi là chưa điền. Phần **"Tài liệu"** (thường trú, CCCD, điện thoại,
-nhóm máu…) **không bao giờ được đọc**.
+**Phần "Tài liệu"** (từ dòng `Tài Liệu` trở xuống):
+
+| Nhãn | Lấy giá trị |
+|---|---|
+| `Thời gian tham gia tập luyện…` · `Thường trú` · `CCCD` · `Điện thoại` · `Nhóm máu` | ô bên phải cùng dòng |
+| `1. Cập Lam Đai` … `n. Cập Lam Đai III` | gắn với khung đai cùng tên trên mặt thẻ |
+| `a. Kế hoạch kiểm tra` · `Thời gian kiểm tra` · `Địa điểm kiểm tra` · `b. Quyết định giám khảo` · `c. Quyết định Công nhận` · `d. Huấn luyện viên trực tiếp giảng dạy` | ô bên phải cùng dòng, thuộc cấp đai ngay phía trên |
+| `4. Thành tích của VĐV` | mỗi dòng bên dưới là một thành tích |
+
+Chuỗi chấm chừa chỗ (`…………`) được coi là chưa điền. Ô có chữ mà script không hiểu sẽ được báo trong cảnh báo.
 
 Nếu mẫu thẻ đổi chữ ở phần đầu thẻ, sửa trong [`lib/site.ts`](lib/site.ts).
+
+## Thông tin cá nhân: hiện, che hay ẩn
+
+Ai cầm thẻ (hoặc ảnh chụp thẻ) đều mở được trang, và phần lớn môn sinh là trẻ em. Vì vậy các trường cá nhân
+được xử lý **ngay lúc `npm run import`** theo `privacy` trong [`lib/site.ts`](lib/site.ts):
+
+| Trường | Mặc định | Hiển thị khi "mask" |
+|---|---|---|
+| Nhóm máu | `show` | |
+| Điện thoại | `mask` | `•••• ••• 678` (3 số cuối) |
+| CCCD | `mask` | `••••••••1234` (4 số cuối) |
+| Thường trú | `mask` | `•••, xã Tân Hà, tỉnh Lâm Đồng` (chỉ xã và tỉnh) |
+
+Đổi thành `"show"` để hiện đầy đủ, hoặc `"hide"` để không đưa lên web. Với `mask`/`hide`, giá trị gốc
+**không bao giờ** được ghi vào `data/students.json`. Đổi cấu hình xong phải chạy lại `npm run import`.
 
 ## Deploy
 
@@ -84,7 +108,9 @@ nhiên 10 ký tự nên không dò được thẻ của người khác.
 
 ```
 app/hv/[slug]/page.tsx     trang thẻ điện tử (tạo sẵn lúc build cho từng học viên)
-components/student-card.tsx
+components/student-card.tsx  bố cục thẻ (mobile một cột, máy tính hai cột)
+components/rank-list.tsx     các cấp đai dạng xổ xuống
+lib/site.ts                  chữ cố định trên thẻ + cấu hình che thông tin cá nhân
 scripts/import.ts          Excel → JSON + ảnh
 scripts/qr.ts              tạo QR, chèn vào bản sao file Excel
 scripts/lib/parse-card.ts  đọc một file thẻ

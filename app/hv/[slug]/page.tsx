@@ -24,7 +24,7 @@ export default async function StudentPage({ params }: PageProps<"/hv/[slug]">) {
   if (!student) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-md px-3 py-4 sm:px-4 sm:py-8 md:max-w-4xl">
       <StudentCard student={student} updatedAt={loadStudents().generatedAt} />
     </main>
   );

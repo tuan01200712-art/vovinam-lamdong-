@@ -2,18 +2,40 @@
 
 export type BeltColor = "blue" | "yellow" | "red" | "white";
 
-/** Một ô đẳng cấp trên thẻ: Lam đai, Lam đai I cấp, ... */
+/** Một cấp đai: khung "Công nhận" trên mặt thẻ + mục "Cập ... Đai" trong phần "Tài liệu". */
 export type Rank = {
   /** Tên cấp, giữ nguyên như trên thẻ, ví dụ "Lam đai I cấp". */
   name: string;
   color: BeltColor;
   /** Số vạch cấp trên đai (0 = đai trơn). */
   stripes: number;
+
+  // --- Mặt thẻ, khung "Công nhận" ---
   /** "dd/mm/yyyy" nếu đọc được ngày, không thì giữ nguyên chữ trong Excel. */
   examDate: string | null;
-  /** Số quyết định công nhận. */
+  /** Số QĐ CN ghi trên thẻ. */
   decisionNo: string | null;
   examiners: string[];
+
+  // --- Phần "Tài liệu", mục "Cập ... Đai" ---
+  /** a. Kế hoạch kiểm tra */
+  plan: string | null;
+  testDate: string | null;
+  testPlace: string | null;
+  /** b. Quyết định giám khảo */
+  examinerDecision: string | null;
+  /** c. Quyết định công nhận */
+  recognitionDecision: string | null;
+  /** d. Huấn luyện viên trực tiếp giảng dạy */
+  coach: string | null;
+};
+
+export type Signer = {
+  /** "TM. BAN CHẤP HÀNH" */
+  onBehalfOf: string | null;
+  /** "CHỦ TỊCH" */
+  role: string | null;
+  name: string | null;
 };
 
 export type Student = {
@@ -28,6 +50,23 @@ export type Student = {
   /** Đường dẫn ảnh trong /public, ví dụ "/photos/<slug>.webp". */
   photo: string | null;
   ranks: Rank[];
+
+  // --- Phần "Tài liệu" ---
+  trainingSince: string | null;
+  /**
+   * Các trường cá nhân dưới đây đã được che/ẩn lúc import theo `site.privacy`,
+   * nên giá trị lưu ở đây chính là giá trị hiển thị công khai.
+   */
+  bloodType: string | null;
+  address: string | null;
+  idNumber: string | null;
+  phone: string | null;
+  achievements: string[];
+
+  // --- Khối ký trên mặt thẻ ---
+  /** "Lâm Đồng, ngày 12 tháng 9 năm 2026", hoặc "Lâm Đồng, năm 2026" nếu chưa điền ngày. */
+  issuedAt: string | null;
+  signer: Signer | null;
 };
 
 export type StudentsFile = {
@@ -45,7 +84,9 @@ export type Registry = {
 };
 
 export function isAchieved(rank: Rank): boolean {
-  return Boolean(rank.examDate || rank.decisionNo || rank.examiners.length);
+  return Boolean(
+    rank.examDate || rank.decisionNo || rank.examiners.length || rank.recognitionDecision,
+  );
 }
 
 /** Cấp cao nhất đã đạt, theo thứ tự các ô trên thẻ. */

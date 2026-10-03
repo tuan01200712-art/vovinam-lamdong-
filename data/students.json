@@ -16,7 +16,13 @@
           "stripes": 0,
           "examDate": "20/09/2026",
           "decisionNo": null,
-          "examiners": []
+          "examiners": [],
+          "plan": "KH số 01/KH-DEMO",
+          "testDate": "20/09/2026",
+          "testPlace": "Nhà văn hóa (dữ liệu mẫu)",
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": "Trần Văn B"
         },
         {
           "name": "Lam đai I cấp",
@@ -24,7 +30,13 @@
           "stripes": 1,
           "examDate": null,
           "decisionNo": null,
-          "examiners": []
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
         },
         {
           "name": "Lam đai II cấp",
@@ -32,7 +44,13 @@
           "stripes": 2,
           "examDate": null,
           "decisionNo": null,
-          "examiners": []
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
         },
         {
           "name": "Lam đai III cấp",
@@ -40,9 +58,29 @@
           "stripes": 3,
           "examDate": null,
           "decisionNo": null,
-          "examiners": []
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
         }
-      ]
+      ],
+      "trainingSince": "Từ tháng 6/2021",
+      "bloodType": "O",
+      "address": "•••, xã Mẫu, tỉnh Lâm Đồng",
+      "idNumber": "••••••••0000",
+      "phone": "•••• ••• 000",
+      "achievements": [
+        "Huy chương vàng giải mẫu 2026"
+      ],
+      "issuedAt": "Lâm Đồng, năm 2026",
+      "signer": {
+        "onBehalfOf": "TM. BAN CHẤP HÀNH",
+        "role": "CHỦ TỊCH",
+        "name": "Người Ký Mẫu"
+      }
     }
   ]
 }
