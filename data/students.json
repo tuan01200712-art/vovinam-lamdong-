@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-10-03T00:00:00.000Z",
+  "students": [
+    {
+      "slug": "demo",
+      "cardNo": "000.26/TĐC",
+      "fullName": "NGUYỄN VĂN A",
+      "birthYear": 2014,
+      "unit": "Dữ liệu mẫu",
+      "club": "CLB Vovinam - Việt Võ Đạo",
+      "photo": null,
+      "ranks": [
+        {
+          "name": "Lam đai",
+          "color": "blue",
+          "stripes": 0,
+          "examDate": "20/09/2026",
+          "decisionNo": null,
+          "examiners": []
+        },
+        {
+          "name": "Lam đai I cấp",
+          "color": "blue",
+          "stripes": 1,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": []
+        },
+        {
+          "name": "Lam đai II cấp",
+          "color": "blue",
+          "stripes": 2,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": []
+        },
+        {
+          "name": "Lam đai III cấp",
+          "color": "blue",
+          "stripes": 3,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": []
+        }
+      ]
+    }
+  ]
+}
