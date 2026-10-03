@@ -2,9 +2,12 @@
 //
 // Giá trị được tìm theo NHÃN chứ không theo toạ độ cố định: "Họ và Tên:" ở D7
 // thì lấy ô bên phải (F7). Nhờ vậy file nào lỡ chèn thêm dòng/cột vẫn đọc đúng.
+//
+// File gồm hai phần: mặt thẻ (phía trên) và phần "Tài liệu" (từ dòng "Tài liệu"
+// trở xuống: thông tin cá nhân, hồ sơ từng cấp đai, thành tích).
 import ExcelJS from "exceljs";
 
-import type { BeltColor, Rank } from "../../lib/types";
+import type { BeltColor, Rank, Signer } from "../../lib/types";
 import { cleanText, formatDateUtc, parseDateVi, valueOrNull } from "./text";
 
 type Cell = { row: number; col: number; address: string; text: string };
@@ -35,8 +38,23 @@ export type ParsedCard = {
   ranks: Rank[];
   photo: { buffer: Buffer; extension: string } | null;
   qr: QrPlacement | null;
+  issuedAt: string | null;
+  signer: Signer | null;
+  /** Giá trị gốc trong file. Việc che/ẩn để đưa lên web làm ở bước import. */
+  personal: Record<PersonalField, string | null>;
+  trainingSince: string | null;
+  achievements: string[];
   warnings: string[];
 };
+
+type PersonalField = "bloodType" | "address" | "idNumber" | "phone";
+type RankRecordField =
+  | "plan"
+  | "testDate"
+  | "testPlace"
+  | "examinerDecision"
+  | "recognitionDecision"
+  | "coach";
 
 const FIELD = {
   fullName: /^họ\s*(?:và\s*)?tên\s*:?\s*(.*)$/iu,
@@ -52,11 +70,59 @@ const EXAM_DATE = /^ngày\s*thi\s*:?\s*(.*)$/iu;
 const DECISION_NO = /^số\s*qđ(?:\s*cn)?\s*:?\s*(.*)$/iu;
 const EXAMINERS = /^giám\s*khảo(?:\s*chấm\s*thi)?\s*:?\s*(.*)$/iu;
 const RECOGNIZED = /^công\s*nhận$/iu;
-/** Từ dòng có các nhãn này trở xuống là phần "Tài liệu" (CCCD, điện thoại...): không bao giờ đọc. */
-const PRIVATE_SECTION =
-  /^(?:tài\s*liệu|cccd|cmnd|điện\s*thoại|thường\s*trú|nhóm\s*máu)(?:\s|:|$)/iu;
+const ISSUED_AT =
+  /^(.+?),\s*ngày\s*(\d{1,2})?[\s.…_]*tháng\s*(\d{1,2})?[\s.…_]*năm\s*(\d{4})[\s.…_]*$/iu;
+const ON_BEHALF = /^tm\.?\s*ban\s*chấp\s*hành/iu;
+const SIGNER_ROLE = /^(?:phó\s*)?chủ\s*tịch$/iu;
 
-const LABELS = [...Object.values(FIELD), PHOTO_MARK, QR_MARK, RANK_TITLE];
+// ---- Phần "Tài liệu" ----
+/** Dòng đầu tiên có một trong các nhãn này là nơi bắt đầu phần "Tài liệu". */
+const RECORD_SECTION =
+  /^(?:tài\s*liệu|thời\s*gian\s*tham\s*gia|thường\s*trú|cccd|cmnd|điện\s*thoại|nhóm\s*máu)(?:\s|:|$)/iu;
+const RECORD_HEADING = /^tài\s*liệu$/iu;
+const TRAINING_SINCE = /^thời\s*gian\s*tham\s*gia\s*tập\s*luyện(?:\s*môn\s*vovinam)?\s*:?\s*(.*)$/iu;
+const PERSONAL: Record<PersonalField, RegExp> = {
+  address: /^(?:địa\s*chỉ\s*)?thường\s*trú\s*:?\s*(.*)$/iu,
+  idNumber: /^(?:số\s*)?(?:cccd|cmnd|căn\s*cước(?:\s*công\s*dân)?)\s*:?\s*(.*)$/iu,
+  phone: /^(?:số\s*)?(?:điện\s*thoại|sđt)\s*:?\s*(.*)$/iu,
+  bloodType: /^nhóm\s*máu\s*:?\s*(.*)$/iu,
+};
+/** "1. Cập Lam Đai", "2. Cấp Lam Đai I" (trong mẫu viết "Cập"). */
+const RANK_SECTION =
+  /^\d+\s*[.)]?\s*c[aâấầậẩẫ]p\s+(lam|hoàng|chuẩn\s*hồng|hồng|bạch)\s*đai(?:\s+(i{1,3}|iv|v|vi))?(?:\s*cấp)?\s*:?$/iu;
+const SUB_ITEM = "(?:[a-zđ]\\s*[.)]\\s*)?";
+const RANK_RECORD: Record<RankRecordField, RegExp> = {
+  plan: new RegExp(`^${SUB_ITEM}kế\\s*hoạch\\s*kiểm\\s*tra\\s*:?\\s*(.*)$`, "iu"),
+  testDate: new RegExp(`^${SUB_ITEM}thời\\s*gian\\s*kiểm\\s*tra\\s*:?\\s*(.*)$`, "iu"),
+  testPlace: new RegExp(`^${SUB_ITEM}địa\\s*điểm\\s*kiểm\\s*tra\\s*:?\\s*(.*)$`, "iu"),
+  examinerDecision: new RegExp(`^${SUB_ITEM}quyết\\s*định\\s*giám\\s*khảo\\s*:?\\s*(.*)$`, "iu"),
+  recognitionDecision: new RegExp(`^${SUB_ITEM}quyết\\s*định\\s*công\\s*nhận\\s*:?\\s*(.*)$`, "iu"),
+  coach: new RegExp(
+    `^${SUB_ITEM}huấn\\s*luyện\\s*viên(?:\\s*trực\\s*tiếp)?(?:\\s*giảng\\s*dạy)?\\s*:?\\s*(.*)$`,
+    "iu",
+  ),
+};
+const ACHIEVEMENTS =
+  /^(?:\d+\s*[.)]?\s*)?thành\s*tích(?:\s*(?:của\s*)?(?:vđv|vận\s*động\s*viên|môn\s*sinh))?\s*:?\s*(.*)$/iu;
+const RECORD_LABELS = [
+  RECORD_HEADING,
+  TRAINING_SINCE,
+  ...Object.values(PERSONAL),
+  RANK_SECTION,
+  ...Object.values(RANK_RECORD),
+  ACHIEVEMENTS,
+];
+const isRecordLabel = (text: string) => RECORD_LABELS.some((re) => re.test(text));
+
+const LABELS = [
+  ...Object.values(FIELD),
+  PHOTO_MARK,
+  QR_MARK,
+  RANK_TITLE,
+  ISSUED_AT,
+  ON_BEHALF,
+  SIGNER_ROLE,
+];
 const isLabel = (text: string) => LABELS.some((re) => re.test(text));
 
 const BELT_COLOR: Record<string, BeltColor> = {
@@ -89,11 +155,11 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
     });
   });
 
-  const privateStart = Math.min(
-    ...all.filter((c) => PRIVATE_SECTION.test(c.text)).map((c) => c.row),
+  const recordStart = Math.min(
+    ...all.filter((c) => RECORD_SECTION.test(c.text)).map((c) => c.row),
     Infinity,
   );
-  const cells = all.filter((c) => c.row < privateStart);
+  const cells = all.filter((c) => c.row < recordStart);
   const merges = (ws.model.merges ?? []).map(decodeRange);
   const boxOf = (c: Cell): Box =>
     merges.find((m) => c.row >= m.top && c.row <= m.bottom && c.col >= m.left && c.col <= m.right) ??
@@ -150,7 +216,7 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
     // Khung kéo tới khung kế tiếp cùng cột; khung cuối cao bằng khung trước nó.
     const bottom = Math.min(
       next ? next.row - 1 : prev ? title.row + (title.row - prev.row) - 1 : Infinity,
-      privateStart - 1,
+      recordStart - 1,
     );
     const box = boxOf(title);
     const inside = cells.filter(
@@ -166,7 +232,141 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
   const qr = qrMark ? { marker: qrMark.address, ...placeQr(ws, boxOf(qrMark)) } : null;
   if (!qrMark) warnings.push('Không thấy ô "MQR": sẽ không chèn được QR vào file Excel');
 
-  return { sheetName: ws.name, fullName, birthYear, unit, club, cardNo, ranks, photo, qr, warnings };
+  const issuedAt = parseIssuedAt(left.find((c) => ISSUED_AT.test(c.text)));
+  const signer = parseSigner(left, boxOf);
+
+  const records = parseRecords(
+    all.filter((c) => c.row >= recordStart),
+    ranks,
+    warnings,
+  );
+
+  return {
+    sheetName: ws.name,
+    fullName,
+    birthYear,
+    unit,
+    club,
+    cardNo,
+    ranks,
+    photo,
+    qr,
+    issuedAt,
+    signer,
+    ...records,
+    warnings,
+  };
+}
+
+/** "Lâm Đồng, ngày 12 tháng 9 năm 2026"; ngày/tháng còn để trống thì chỉ giữ năm. */
+function parseIssuedAt(cell: Cell | undefined): string | null {
+  const m = cell?.text.match(ISSUED_AT);
+  if (!m) return null;
+  const [, place, day, month, year] = m;
+  return day && month
+    ? `${place}, ngày ${Number(day)} tháng ${Number(month)} năm ${year}`
+    : `${place}, năm ${year}`;
+}
+
+/** "TM. BAN CHẤP HÀNH" / "CHỦ TỊCH" / tên người ký ở ô đầu tiên có chữ bên dưới chức danh. */
+function parseSigner(left: Cell[], boxOf: (c: Cell) => Box): Signer | null {
+  const onBehalf = left.find((c) => ON_BEHALF.test(c.text));
+  const role = left.find((c) => SIGNER_ROLE.test(c.text));
+  let name: string | null = null;
+  if (role) {
+    const box = boxOf(role);
+    const below = left
+      .filter((c) => c.row > box.bottom && c.col >= box.left && c.col <= box.right && !isLabel(c.text))
+      .sort((a, b) => a.row - b.row || a.col - b.col);
+    name = below.map((c) => valueOrNull(c.text)).find(Boolean) ?? null;
+  }
+  if (!onBehalf && !role && !name) return null;
+  return { onBehalfOf: onBehalf?.text ?? null, role: role?.text ?? null, name };
+}
+
+/**
+ * Phần "Tài liệu": duyệt từ trên xuống, mỗi nhãn lấy giá trị ở ô bên phải cùng dòng.
+ * Các mục "a. Kế hoạch kiểm tra", "d. Huấn luyện viên..." gắn vào cấp đai của tiêu đề
+ * "n. Cập ... Đai" gần nhất phía trên. Mọi dòng dưới "Thành tích" là danh sách thành tích.
+ */
+function parseRecords(records: Cell[], ranks: Rank[], warnings: string[]) {
+  const personal: Record<PersonalField, string | null> = {
+    bloodType: null,
+    address: null,
+    idNumber: null,
+    phone: null,
+  };
+  let trainingSince: string | null = null;
+  const achievementRows = new Map<number, string[]>();
+
+  const consumed = new Set<Cell>();
+  const valueOf = (cell: Cell, re: RegExp): string | null => {
+    const inline = valueOrNull(cell.text.match(re)![1]);
+    if (inline) return inline;
+    const next = records
+      .filter((c) => c.row === cell.row && c.col > cell.col && c.col <= cell.col + 8)
+      .sort((a, b) => a.col - b.col)[0];
+    if (!next || isRecordLabel(next.text)) return null;
+    consumed.add(next);
+    return valueOrNull(next.text);
+  };
+
+  let section: { kind: "rank"; rank: Rank | undefined; title: string } | { kind: "achievements" } | null =
+    null;
+
+  for (const c of records) {
+    if (consumed.has(c) || RECORD_HEADING.test(c.text)) continue;
+    let m: RegExpMatchArray | null;
+
+    if ((m = c.text.match(RANK_SECTION))) {
+      const color = BELT_COLOR[cleanText(m[1]).toLocaleLowerCase("vi")] ?? "blue";
+      const stripes = m[2] ? ROMAN[m[2].toLowerCase()] : 0;
+      const rank = ranks.find((r) => r.color === color && r.stripes === stripes);
+      if (!rank) warnings.push(`Tài liệu: mục "${c.text}" không khớp khung đẳng cấp nào trên mặt thẻ`);
+      section = { kind: "rank", rank, title: c.text };
+      continue;
+    }
+    if (ACHIEVEMENTS.test(c.text)) {
+      section = { kind: "achievements" };
+      const inline = valueOf(c, ACHIEVEMENTS);
+      if (inline) achievementRows.set(c.row, [inline]);
+      continue;
+    }
+    if (section?.kind === "achievements") {
+      const v = valueOrNull(c.text);
+      if (v) achievementRows.set(c.row, [...(achievementRows.get(c.row) ?? []), v]);
+      continue;
+    }
+    if (TRAINING_SINCE.test(c.text)) {
+      trainingSince = valueOf(c, TRAINING_SINCE);
+      continue;
+    }
+    const personalField = (Object.keys(PERSONAL) as PersonalField[]).find((k) => PERSONAL[k].test(c.text));
+    if (personalField) {
+      personal[personalField] = valueOf(c, PERSONAL[personalField]);
+      continue;
+    }
+    const recordField = (Object.keys(RANK_RECORD) as RankRecordField[]).find((k) =>
+      RANK_RECORD[k].test(c.text),
+    );
+    if (recordField && section?.kind === "rank") {
+      const v = valueOf(c, RANK_RECORD[recordField]);
+      if (section.rank) {
+        section.rank[recordField] = recordField === "testDate" && v ? (parseDateVi(v) ?? v) : v;
+      }
+      continue;
+    }
+
+    const v = valueOrNull(c.text);
+    if (v) warnings.push(`Tài liệu: bỏ qua ô ${c.address} "${v}" vì không rõ là thông tin gì`);
+  }
+
+  const achievements = [...achievementRows.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, parts]) => parts.join(" ").replace(/^[-+•*]\s*/u, ""))
+    .filter(Boolean);
+
+  return { personal, trainingSince, achievements };
 }
 
 function parseRank(title: Cell, inside: Cell[], warnings: string[]): Rank {
@@ -179,6 +379,12 @@ function parseRank(title: Cell, inside: Cell[], warnings: string[]): Rank {
     examDate: null,
     decisionNo: null,
     examiners: [],
+    plan: null,
+    testDate: null,
+    testPlace: null,
+    examinerDecision: null,
+    recognitionDecision: null,
+    coach: null,
   };
 
   let afterExaminerLabel = false;

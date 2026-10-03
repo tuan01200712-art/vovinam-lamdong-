@@ -29,6 +29,7 @@
   --color-belt-yellow: var(--belt-yellow);
   --color-belt-red: var(--belt-red);
   --color-belt-white: var(--belt-white);
+  --color-belt-red-ink: var(--belt-red-ink);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -62,6 +63,8 @@
   --belt-yellow: oklch(0.88 0.17 95);
   --belt-red: oklch(0.58 0.22 27);
   --belt-white: oklch(0.98 0 0);
+  /* Đỏ đậm hơn cho chữ trên nền vàng (giống chữ đỏ trên thẻ giấy), đủ tương phản để đọc. */
+  --belt-red-ink: oklch(0.47 0.19 27);
 }
 
 @layer base {

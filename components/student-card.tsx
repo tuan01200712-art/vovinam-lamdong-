@@ -1,92 +1,80 @@
 import Image from "next/image";
-import { CircleCheck, UserRound } from "lucide-react";
+import { IdCard, ShieldCheck, Stamp, Trophy, UserRound } from "lucide-react";
 
 import { BeltIcon } from "@/components/belt-icon";
+import { FieldList, SectionHeading, type Field } from "@/components/field-list";
+import { RankList } from "@/components/rank-list";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { formatDateVi } from "@/lib/format";
+import { isMasked } from "@/lib/privacy";
 import { site } from "@/lib/site";
-import { currentRank, isAchieved, type Rank, type Student } from "@/lib/types";
+import { currentRank, type Student } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
+// Mobile: mọi phần xếp một cột theo thứ tự đọc.
+// Từ md: cột trái (hồ sơ + xác nhận), cột phải (đẳng cấp, hồ sơ môn sinh, thành tích).
 export function StudentCard({ student, updatedAt }: { student: Student; updatedAt: string }) {
-  const rank = currentRank(student.ranks);
-
   return (
     <Card className="gap-0 overflow-hidden py-0">
+      <NationalHeader />
       <CardBanner />
 
-      <section className="flex flex-col items-center px-5 pb-6 text-center">
-        <Photo src={student.photo} name={student.fullName} />
+      <div className="grid md:grid-cols-[18rem_1fr] md:grid-rows-[auto_1fr]">
+        <Profile student={student} className="md:col-start-1 md:row-start-1 md:border-r" />
 
-        <h2 className="mt-4 text-xl leading-tight font-bold tracking-wide text-balance uppercase">
-          {student.fullName}
-        </h2>
+        <div className="divide-y border-t md:col-start-2 md:row-span-2 md:row-start-1 md:border-t-0">
+          <RanksSection student={student} />
+          <RecordSection student={student} />
+          <AchievementsSection achievements={student.achievements} />
+        </div>
 
-        {rank ? (
-          <Badge variant="secondary" className="mt-2 gap-2 px-2.5 py-1 text-sm">
-            {/* Bọc span để luật [&>svg]:size-3 của Badge không ép nhỏ icon đai. */}
-            <span className="flex">
-              <BeltIcon color={rank.color} stripes={rank.stripes} className="h-3 w-10" />
-            </span>
-            {rank.name}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="mt-2">
-            Chưa có đẳng cấp
-          </Badge>
-        )}
+        <SignatureSection
+          student={student}
+          className="border-t md:col-start-1 md:row-start-2 md:border-r"
+        />
+      </div>
 
-        <dl className="mt-5 grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-left text-sm">
-          <InfoRow label="Năm sinh" value={student.birthYear?.toString()} />
-          <InfoRow label="Đơn vị" value={student.unit} />
-          <InfoRow label="Sinh hoạt tại" value={student.club} />
-          <InfoRow label="Số thẻ" value={student.cardNo} />
-        </dl>
-      </section>
-
-      <Separator />
-
-      <section className="px-5 py-5">
-        <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-          Đẳng cấp môn sinh đạt được
-        </h3>
-        <ol className="mt-3 space-y-2">
-          {student.ranks.map((r) => (
-            <RankItem key={r.name} rank={r} />
-          ))}
-        </ol>
-      </section>
-
-      <footer className="bg-muted text-muted-foreground px-5 py-3 text-center text-xs">
-        <p className="font-medium">{site.footer}</p>
-        <p className="mt-0.5">Cập nhật ngày {formatDateVi(updatedAt)}</p>
+      <footer className="bg-belt-yellow px-5 py-3 text-center">
+        <p className="text-belt-red-ink text-sm font-bold">{site.footer}</p>
+        <p className="text-foreground/70 mt-0.5 text-xs">Cập nhật ngày {formatDateVi(updatedAt)}</p>
       </footer>
     </Card>
+  );
+}
+
+function NationalHeader() {
+  return (
+    <div className="bg-card px-4 py-2 text-center leading-tight">
+      <p className="text-[10px] font-bold tracking-wide sm:text-xs">{site.nationalTitle}</p>
+      <p className="mt-0.5 text-[10px] font-semibold underline underline-offset-2 sm:text-xs">
+        {site.nationalMotto}
+      </p>
+    </div>
   );
 }
 
 function CardBanner() {
   return (
     <header className="bg-primary text-primary-foreground relative px-4 pt-4 pb-14">
-      <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
         <Image
           src={site.logos.federation}
           alt="Logo Liên đoàn Vovinam"
           width={48}
           height={48}
-          className="size-12 rounded-full bg-white"
+          className="size-12 rounded-full bg-white sm:size-14"
         />
         <div className="min-w-0 text-center">
-          <p className="text-[10px] leading-snug font-medium tracking-wide opacity-80">
+          <p className="text-[10px] leading-snug font-medium tracking-wide opacity-80 sm:text-xs">
             {site.authority}
             <br />
             {site.federation}
           </p>
-          <h1 className="mt-1.5 text-lg leading-none font-extrabold tracking-[0.15em]">
+          <h1 className="mt-1.5 text-lg leading-none font-extrabold tracking-[0.15em] sm:text-2xl">
             {site.cardTitle}
           </h1>
-          <p className="text-belt-yellow mt-1 text-[11px] font-semibold tracking-wide">
+          <p className="text-belt-yellow mt-1 text-[11px] font-semibold tracking-wide sm:text-sm">
             {site.cardSubtitle}
           </p>
         </div>
@@ -95,76 +83,149 @@ function CardBanner() {
           alt="Logo Vovinam"
           width={36}
           height={48}
-          className="h-12 w-9 object-contain"
+          className="h-12 w-9 object-contain sm:h-14 sm:w-11"
         />
       </div>
     </header>
   );
 }
 
-function Photo({ src, name }: { src: string | null; name: string }) {
+function Profile({ student, className }: { student: Student; className?: string }) {
+  const rank = currentRank(student.ranks);
   return (
-    <div className="bg-muted relative -mt-11 aspect-[3/4] w-32 overflow-hidden rounded-lg shadow-md ring-4 ring-white">
-      {src ? (
-        <Image
-          src={src}
-          alt={`Ảnh ${name}`}
-          width={300}
-          height={400}
-          priority
-          className="size-full object-cover"
-        />
+    <section className={cn("flex flex-col items-center px-5 pb-6 text-center", className)}>
+      <Photo src={student.photo} name={student.fullName} />
+
+      <h2 className="mt-4 text-xl leading-tight font-bold tracking-wide text-balance uppercase">
+        {student.fullName}
+      </h2>
+
+      {rank ? (
+        <Badge variant="secondary" className="mt-2 gap-2 px-2.5 py-1 text-sm">
+          {/* Bọc span để luật [&>svg]:size-3 của Badge không ép nhỏ icon đai. */}
+          <span className="flex">
+            <BeltIcon color={rank.color} stripes={rank.stripes} className="h-3 w-10" />
+          </span>
+          {rank.name}
+        </Badge>
       ) : (
-        <UserRound className="text-muted-foreground/50 absolute inset-0 m-auto size-14" />
+        <Badge variant="outline" className="mt-2">
+          Chưa có đẳng cấp
+        </Badge>
       )}
-    </div>
+
+      <FieldList
+        className="mt-5 w-full text-left"
+        fields={[
+          ["Năm sinh", student.birthYear?.toString()],
+          ["Đơn vị", student.unit],
+          ["Sinh hoạt tại", student.club],
+          ["Số thẻ", student.cardNo],
+        ]}
+      />
+    </section>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value || "—"}</dd>
-    </>
-  );
-}
-
-function RankItem({ rank }: { rank: Rank }) {
-  const achieved = isAchieved(rank);
-  const details = [
-    rank.examDate && `Ngày thi: ${rank.examDate}`,
-    rank.decisionNo && `Số QĐ CN: ${rank.decisionNo}`,
-    rank.examiners.length > 0 && `Giám khảo: ${rank.examiners.join(", ")}`,
-  ].filter(Boolean);
-
-  return (
-    <li
-      className={
-        achieved
-          ? "bg-secondary/60 rounded-lg border px-3 py-2.5"
-          : "rounded-lg border border-dashed px-3 py-2.5"
-      }
-    >
-      <div className="flex items-center gap-3">
-        <BeltIcon color={rank.color} stripes={rank.stripes} muted={!achieved} />
-        <span className={achieved ? "font-semibold" : "text-muted-foreground"}>{rank.name}</span>
-        {achieved ? (
-          <Badge className="bg-success text-success-foreground ml-auto border-transparent">
-            <CircleCheck />
-            Đã đạt
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground ml-auto text-xs">Chưa đạt</span>
-        )}
+function Photo({ src, name }: { src: string | null; name: string }) {
+  const frame =
+    "bg-muted relative -mt-11 block aspect-[3/4] w-32 overflow-hidden rounded-lg shadow-md ring-4 ring-white sm:w-36";
+  if (!src) {
+    return (
+      <div className={frame}>
+        <UserRound className="text-muted-foreground/50 absolute inset-0 m-auto size-14" />
       </div>
-      {details.length > 0 && (
-        <ul className="text-muted-foreground mt-1.5 space-y-0.5 pl-[4.25rem] text-xs">
-          {details.map((d) => (
-            <li key={d as string}>{d}</li>
+    );
+  }
+  // Chạm vào ảnh để xem ảnh lớn.
+  return (
+    <a href={src} target="_blank" rel="noopener" className={frame} aria-label={`Xem ảnh lớn của ${name}`}>
+      <Image
+        src={src}
+        alt={`Ảnh ${name}`}
+        width={300}
+        height={400}
+        priority
+        className="size-full object-cover"
+      />
+    </a>
+  );
+}
+
+function RanksSection({ student }: { student: Student }) {
+  return (
+    <section>
+      <div className="bg-belt-yellow flex items-center gap-2.5 px-4 py-2.5 sm:px-5">
+        <Image src={site.logos.vovinam} alt="" width={21} height={28} className="h-7 w-auto" />
+        <h3 className="text-belt-red-ink text-sm font-extrabold tracking-wide">{site.ranksTitle}</h3>
+      </div>
+      <div className="p-4 sm:p-5">
+        <RankList ranks={student.ranks} />
+      </div>
+    </section>
+  );
+}
+
+function RecordSection({ student }: { student: Student }) {
+  // Trường đặt "hide" trong site.privacy thì bỏ hẳn dòng, không hiện "—" gây hiểu nhầm là chưa khai.
+  const personal: [Field, keyof typeof site.privacy | null][] = [
+    [["Thời gian tham gia tập luyện", student.trainingSince], null],
+    [["Nhóm máu", student.bloodType], "bloodType"],
+    [["Thường trú", student.address], "address"],
+    [["CCCD", student.idNumber], "idNumber"],
+    [["Điện thoại", student.phone], "phone"],
+  ];
+  const fields = personal
+    .filter(([, key]) => !key || site.privacy[key] !== "hide")
+    .map(([field]) => field);
+  const anyMasked = fields.some(([, value]) => isMasked(value ?? null));
+
+  return (
+    <section className="space-y-3 px-4 py-5 sm:px-5">
+      <SectionHeading icon={IdCard}>Hồ sơ môn sinh</SectionHeading>
+      <FieldList fields={fields} />
+      {anyMasked && (
+        <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
+          <ShieldCheck aria-hidden className="mt-px size-3.5 shrink-0" />
+          Một số thông tin cá nhân được che bớt để bảo vệ môn sinh.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function AchievementsSection({ achievements }: { achievements: string[] }) {
+  return (
+    <section className="space-y-3 px-4 py-5 sm:px-5">
+      <SectionHeading icon={Trophy}>Thành tích của VĐV</SectionHeading>
+      {achievements.length > 0 ? (
+        <ul className="space-y-2 text-sm">
+          {achievements.map((a, i) => (
+            <li key={i} className="flex gap-2.5">
+              <Trophy aria-hidden className="text-belt-yellow mt-0.5 size-4 shrink-0 fill-current" />
+              <span>{a}</span>
+            </li>
           ))}
         </ul>
+      ) : (
+        <p className="text-muted-foreground text-sm">Chưa có thành tích được ghi nhận.</p>
       )}
-    </li>
+    </section>
+  );
+}
+
+function SignatureSection({ student, className }: { student: Student; className?: string }) {
+  const { signer, issuedAt } = student;
+  if (!signer && !issuedAt) return null;
+  return (
+    <section className={cn("space-y-3 px-5 py-5", className)}>
+      <SectionHeading icon={Stamp}>Xác nhận</SectionHeading>
+      <div className="text-center">
+        {issuedAt && <p className="text-muted-foreground text-sm italic">{issuedAt}</p>}
+        {signer?.onBehalfOf && <p className="mt-2 text-sm font-bold uppercase">{signer.onBehalfOf}</p>}
+        {signer?.role && <p className="text-sm font-bold uppercase">{signer.role}</p>}
+        {signer?.name && <p className="mt-3 text-base font-bold">{signer.name}</p>}
+      </div>
+    </section>
   );
 }
