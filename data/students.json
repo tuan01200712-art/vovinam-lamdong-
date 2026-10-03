@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T11:19:53.656Z",
+  "generatedAt": "2026-10-03T11:32:29.835Z",
   "students": [
     {
       "slug": "r4qbyznvv3",
@@ -76,9 +76,9 @@
       "secret": {
         "alg": "PBKDF2-SHA256/AES-256-GCM",
         "iter": 600000,
-        "salt": "gg0jH5P2biVJdx6m8Cqm5Q==",
-        "iv": "wvlZLpnrCYFZeLZU",
-        "data": "8+AKqFzwYKriixuwbD/my7ZD4wFReu2QNKRPmMxQdntmxnk0N4eEDtV9nwylR7m6Rp4j3EY="
+        "salt": "WxKy0lVAWX2j7AXB752Xjw==",
+        "iv": "Nkz5uu9pYpbBDQD+",
+        "data": "H62OL78jFysXB0akX73ThS0c5k9GjO0MNUCO8wgSoJ5QgOOcAEEa4nxysBA/r+ajx4l9Sic="
       },
       "issuedAt": "Lâm Đồng, năm 2026",
       "signer": {
