@@ -20,7 +20,8 @@ export function StudentCard({ student, updatedAt }: { student: Student; updatedA
       <NationalHeader />
       <CardBanner />
 
-      <div className="grid md:grid-cols-[18rem_1fr] md:grid-rows-[auto_1fr]">
+      {/* minmax(0,1fr): cột không được nở rộng hơn thẻ theo nội dung dài (thẻ có overflow-hidden). */}
+      <div className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[auto_1fr]">
         <Profile student={student} className="md:col-start-1 md:row-start-1 md:border-r" />
 
         <div className="divide-y border-t md:col-start-2 md:row-span-2 md:row-start-1 md:border-t-0">

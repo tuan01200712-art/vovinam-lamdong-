@@ -70,8 +70,11 @@ const EXAM_DATE = /^ngày\s*thi\s*:?\s*(.*)$/iu;
 const DECISION_NO = /^số\s*qđ(?:\s*cn)?\s*:?\s*(.*)$/iu;
 const EXAMINERS = /^giám\s*khảo(?:\s*chấm\s*thi)?\s*:?\s*(.*)$/iu;
 const RECOGNIZED = /^công\s*nhận$/iu;
+/** "Lâm Đồng, ngày …12… tháng …9… năm 2026" (ngày/tháng có thể còn để trống). */
 const ISSUED_AT =
-  /^(.+?),\s*ngày\s*(\d{1,2})?[\s.…_]*tháng\s*(\d{1,2})?[\s.…_]*năm\s*(\d{4})[\s.…_]*$/iu;
+  /^(.+?),?\s*ngày[\s.…_]*(\d{1,2})?[\s.…_]*tháng[\s.…_]*(\d{1,2})?[\s.…_]*,?\s*năm[\s.…_]*(\d{4})[\s.…_]*$/iu;
+/** "Lâm Đồng, ngày 05/9/2026" */
+const ISSUED_AT_NUMERIC = /^(.+?),?\s*ngày\s*(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{4})[\s.]*$/iu;
 const ON_BEHALF = /^tm\.?\s*ban\s*chấp\s*hành/iu;
 const SIGNER_ROLE = /^(?:phó\s*)?chủ\s*tịch$/iu;
 
@@ -87,9 +90,17 @@ const PERSONAL: Record<PersonalField, RegExp> = {
   phone: /^(?:số\s*)?(?:điện\s*thoại|sđt)\s*:?\s*(.*)$/iu,
   bloodType: /^nhóm\s*máu\s*:?\s*(.*)$/iu,
 };
-/** "1. Cập Lam Đai", "2. Cấp Lam Đai I" (trong mẫu viết "Cập"). */
+/**
+ * "1. Cập Lam Đai", "2. Cấp Lam Đai I" (trong mẫu viết "Cập"). Chấp nhận cả các biến thể hay gặp
+ * khi gõ tay: không đánh số, "2-", số La Mã ở đầu, "Lam Đai 1", dấu chấm/hai chấm ở cuối.
+ */
 const RANK_SECTION =
-  /^\d+\s*[.)]?\s*c[aâấầậẩẫ]p\s+(lam|hoàng|chuẩn\s*hồng|hồng|bạch)\s*đai(?:\s+(i{1,3}|iv|v|vi))?(?:\s*cấp)?\s*:?$/iu;
+  /^(?:(?:\d+|[ivx]+)\s*[.)\-–]?\s*)?(?:c[aâấầậẩẫ]p\s+)?(lam|hoàng|chuẩn\s*hồng|hồng|bạch)\s*đai(?:\s+(i{1,3}|iv|v|vi|[1-6]))?(?:\s*cấp)?[\s.:]*$/iu;
+/**
+ * Ô không hiểu nhưng trông như tiêu đề một khối (có chữ "đai", hoặc mở đầu bằng "3." / "IV)").
+ * Gặp ô này thì ngừng ghi vào cấp đai đang đọc, tránh ghép nhầm hồ sơ của khối sau vào đai trước.
+ */
+const LOOKS_LIKE_HEADING = /đai|^(?:\d+|[ivx]+)\s*[.)\-–]\s*\p{L}/iu;
 const SUB_ITEM = "(?:[a-zđ]\\s*[.)]\\s*)?";
 const RANK_RECORD: Record<RankRecordField, RegExp> = {
   plan: new RegExp(`^${SUB_ITEM}kế\\s*hoạch\\s*kiểm\\s*tra\\s*:?\\s*(.*)$`, "iu"),
@@ -120,6 +131,7 @@ const LABELS = [
   QR_MARK,
   RANK_TITLE,
   ISSUED_AT,
+  ISSUED_AT_NUMERIC,
   ON_BEHALF,
   SIGNER_ROLE,
 ];
@@ -132,7 +144,10 @@ const BELT_COLOR: Record<string, BeltColor> = {
   hồng: "red",
   bạch: "white",
 };
-const ROMAN: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6 };
+const ROMAN: Record<string, number> = {
+  i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6,
+  "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6,
+};
 
 export async function parseCard(data: Buffer): Promise<ParsedCard> {
   const wb = new ExcelJS.Workbook();
@@ -232,7 +247,12 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
   const qr = qrMark ? { marker: qrMark.address, ...placeQr(ws, boxOf(qrMark)) } : null;
   if (!qrMark) warnings.push('Không thấy ô "MQR": sẽ không chèn được QR vào file Excel');
 
-  const issuedAt = parseIssuedAt(left.find((c) => ISSUED_AT.test(c.text)));
+  const issuedCell = left.find((c) => ISSUED_AT.test(c.text) || ISSUED_AT_NUMERIC.test(c.text));
+  const issuedAt = parseIssuedAt(issuedCell);
+  if (!issuedAt) {
+    const unreadable = left.find((c) => /ngày.*\d{4}/iu.test(c.text));
+    if (unreadable) warnings.push(`Không đọc được ngày cấp từ ô ${unreadable.address} "${unreadable.text}"`);
+  }
   const signer = parseSigner(left, boxOf);
 
   const records = parseRecords(
@@ -260,10 +280,12 @@ export async function parseCard(data: Buffer): Promise<ParsedCard> {
 
 /** "Lâm Đồng, ngày 12 tháng 9 năm 2026"; ngày/tháng còn để trống thì chỉ giữ năm. */
 function parseIssuedAt(cell: Cell | undefined): string | null {
-  const m = cell?.text.match(ISSUED_AT);
+  const m = cell && (cell.text.match(ISSUED_AT) ?? cell.text.match(ISSUED_AT_NUMERIC));
   if (!m) return null;
-  const [, place, day, month, year] = m;
-  return day && month
+  const [, rawPlace, day, month, year] = m;
+  const place = rawPlace.trim();
+  const valid = day && month && Number(day) >= 1 && Number(day) <= 31 && Number(month) >= 1 && Number(month) <= 12;
+  return valid
     ? `${place}, ngày ${Number(day)} tháng ${Number(month)} năm ${year}`
     : `${place}, năm ${year}`;
 }
@@ -300,6 +322,15 @@ function parseRecords(records: Cell[], ranks: Rank[], warnings: string[]) {
   const achievementRows = new Map<number, string[]>();
 
   const consumed = new Set<Cell>();
+  /** Ô trống không xoá giá trị đã có; một mục khai hai lần thì giữ lần đầu và cảnh báo. */
+  const keep = (current: string | null, next: string | null, what: string): string | null => {
+    if (next == null) return current;
+    if (current != null && current !== next) {
+      warnings.push(`Tài liệu: ${what} có hai giá trị "${current}" và "${next}", giữ giá trị đầu`);
+      return current;
+    }
+    return next;
+  };
   const valueOf = (cell: Cell, re: RegExp): string | null => {
     const inline = valueOrNull(cell.text.match(re)![1]);
     if (inline) return inline;
@@ -318,11 +349,16 @@ function parseRecords(records: Cell[], ranks: Rank[], warnings: string[]) {
     if (consumed.has(c) || RECORD_HEADING.test(c.text)) continue;
     let m: RegExpMatchArray | null;
 
-    if ((m = c.text.match(RANK_SECTION))) {
+    // Bỏ phần ghi chú trong ngoặc ở cuối tiêu đề: "2. Cập Lam Đai I (2027)".
+    if ((m = c.text.replace(/\s*\([^)]*\)\s*$/u, "").match(RANK_SECTION))) {
       const color = BELT_COLOR[cleanText(m[1]).toLocaleLowerCase("vi")] ?? "blue";
       const stripes = m[2] ? ROMAN[m[2].toLowerCase()] : 0;
       const rank = ranks.find((r) => r.color === color && r.stripes === stripes);
-      if (!rank) warnings.push(`Tài liệu: mục "${c.text}" không khớp khung đẳng cấp nào trên mặt thẻ`);
+      if (!rank) {
+        warnings.push(
+          `Tài liệu: mục "${c.text}" không khớp khung đẳng cấp nào trên mặt thẻ, bỏ qua các dòng bên dưới nó`,
+        );
+      }
       section = { kind: "rank", rank, title: c.text };
       continue;
     }
@@ -338,12 +374,12 @@ function parseRecords(records: Cell[], ranks: Rank[], warnings: string[]) {
       continue;
     }
     if (TRAINING_SINCE.test(c.text)) {
-      trainingSince = valueOf(c, TRAINING_SINCE);
+      trainingSince = keep(trainingSince, valueOf(c, TRAINING_SINCE), `"${c.text}"`);
       continue;
     }
     const personalField = (Object.keys(PERSONAL) as PersonalField[]).find((k) => PERSONAL[k].test(c.text));
     if (personalField) {
-      personal[personalField] = valueOf(c, PERSONAL[personalField]);
+      personal[personalField] = keep(personal[personalField], valueOf(c, PERSONAL[personalField]), `"${c.text}"`);
       continue;
     }
     const recordField = (Object.keys(RANK_RECORD) as RankRecordField[]).find((k) =>
@@ -352,13 +388,22 @@ function parseRecords(records: Cell[], ranks: Rank[], warnings: string[]) {
     if (recordField && section?.kind === "rank") {
       const v = valueOf(c, RANK_RECORD[recordField]);
       if (section.rank) {
-        section.rank[recordField] = recordField === "testDate" && v ? (parseDateVi(v) ?? v) : v;
+        const value = recordField === "testDate" && v ? (parseDateVi(v) ?? v) : v;
+        section.rank[recordField] = keep(section.rank[recordField], value, `${section.rank.name}: "${c.text}"`);
       }
       continue;
     }
 
     const v = valueOrNull(c.text);
-    if (v) warnings.push(`Tài liệu: bỏ qua ô ${c.address} "${v}" vì không rõ là thông tin gì`);
+    if (!v) continue;
+    if (LOOKS_LIKE_HEADING.test(v)) {
+      warnings.push(
+        `Tài liệu: không hiểu tiêu đề ô ${c.address} "${v}", bỏ qua các dòng bên dưới nó (không ghép vào cấp đai khác)`,
+      );
+      section = { kind: "rank", rank: undefined, title: v };
+    } else {
+      warnings.push(`Tài liệu: bỏ qua ô ${c.address} "${v}" vì không rõ là thông tin gì`);
+    }
   }
 
   const achievements = [...achievementRows.entries()]

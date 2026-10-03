@@ -8,6 +8,7 @@ import path from "node:path";
 import sharp from "sharp";
 
 import { publicValue } from "../lib/privacy";
+import { site } from "../lib/site";
 import { currentRank, isAchieved, type Rank, type Student, type StudentsFile } from "../lib/types";
 import { parseCard, type ParsedCard } from "./lib/parse-card";
 import {
@@ -155,6 +156,10 @@ async function main() {
 }
 
 function toStudent(r: Row): Student {
+  const address = publicValue("address", r.card.personal.address);
+  if (site.privacy.address === "mask" && r.card.personal.address && address === "•••") {
+    r.warnings.push("Thường trú: không nhận ra xã/phường, tỉnh nên đã che toàn bộ");
+  }
   return {
     slug: r.slug,
     cardNo: r.card.cardNo,
@@ -168,7 +173,7 @@ function toStudent(r: Row): Student {
     trainingSince: r.card.trainingSince,
     // Che/ẩn ngay tại đây theo site.privacy: giá trị gốc không bao giờ vào students.json.
     bloodType: publicValue("bloodType", r.card.personal.bloodType),
-    address: publicValue("address", r.card.personal.address),
+    address,
     idNumber: publicValue("idNumber", r.card.personal.idNumber),
     phone: publicValue("phone", r.card.personal.phone),
     achievements: r.card.achievements,

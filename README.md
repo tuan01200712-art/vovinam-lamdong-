@@ -90,8 +90,8 @@ Ai cầm thẻ (hoặc ảnh chụp thẻ) đều mở được trang, và phầ
 |---|---|---|
 | Nhóm máu | `show` | |
 | Điện thoại | `mask` | `•••• ••• 678` (3 số cuối) |
-| CCCD | `mask` | `••••••••1234` (4 số cuối) |
-| Thường trú | `mask` | `•••, xã Tân Hà, tỉnh Lâm Đồng` (chỉ xã và tỉnh) |
+| CCCD | `mask` | `••••••••••••` (che hết: 6 số đầu CCCD suy ra được từ tỉnh, giới tính, năm sinh) |
+| Thường trú | `mask` | `•••, xã Tân Hà, tỉnh Lâm Đồng` (chỉ giữ xã và tỉnh khi nhận ra chắc chắn; thôn, đường, số nhà, số điện thoại ghi kèm đều bị bỏ) |
 
 Đổi thành `"show"` để hiện đầy đủ, hoặc `"hide"` để không đưa lên web. Với `mask`/`hide`, giá trị gốc
 **không bao giờ** được ghi vào `data/students.json`. Đổi cấu hình xong phải chạy lại `npm run import`.
