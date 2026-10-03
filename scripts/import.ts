@@ -8,7 +8,7 @@ import path from "node:path";
 import sharp from "sharp";
 
 import { publicValue } from "../lib/privacy";
-import type { SecretValues } from "../lib/secret";
+import { normalizeViewCode, type SecretValues } from "../lib/secret";
 import { site, type PrivateField } from "../lib/site";
 import { currentRank, isAchieved, type Rank, type Student, type StudentsFile } from "../lib/types";
 import { parseCard, type ParsedCard } from "./lib/parse-card";
@@ -41,7 +41,7 @@ type Row = {
 };
 
 async function main() {
-  const viewCode = readViewCode();
+  const viewCode = await readViewCode();
   const legacy = await listLegacyXls();
   if (legacy.length) {
     console.warn(`⚠ Bỏ qua ${legacy.length} file .xls đời cũ (mở bằng Excel → Lưu thành .xlsx): ${legacy.join(", ")}`);
@@ -153,7 +153,10 @@ async function main() {
   }
   const lockable = rows.filter(hasMaskedRaw).length;
   const sealed = students.filter((s) => s.secret).length;
-  if (sealed) console.log(`\n🔒 ${sealed} thẻ có nút xem đầy đủ (cần mã xem VIEW_CODE).`);
+  if (sealed && viewCode) {
+    // In độ dài để người chạy nhận ra nếu mã bị cắt ngắn so với mã đã giao cho HLV.
+    console.log(`\n🔒 ${sealed} thẻ có nút xem đầy đủ (mã xem VIEW_CODE dài ${[...viewCode].length} ký tự).`);
+  }
   else if (lockable) {
     console.warn(
       `\n⚠ Chưa đặt VIEW_CODE trong .env: ${lockable} thẻ chỉ hiện bản đã che, chưa có nút con mắt để xem đầy đủ.`,
@@ -206,13 +209,22 @@ function sealSecret(r: Row, sealKey: SealKey | null) {
   return sealKey && Object.keys(values).length ? seal(sealKey, r.slug, values) : null;
 }
 
-function readViewCode(): string | null {
-  try {
-    process.loadEnvFile(path.join(ROOT, ".env"));
-  } catch {
-    // Không có file .env: dùng biến môi trường sẵn có.
+async function readViewCode(): Promise<string | null> {
+  const envPath = path.join(ROOT, ".env");
+  const envText = await fs.readFile(envPath, "utf8").catch(() => null);
+  if (envText !== null) {
+    // Không có ngoặc kép thì Node coi phần sau "#" là ghi chú và lặng lẽ cắt bỏ: mã thật sẽ khác mã đã giao.
+    const raw = envText.match(/^\s*VIEW_CODE\s*=(.*)$/m)?.[1].trim();
+    if (raw && !/^["'`]/.test(raw) && raw.includes("#")) {
+      console.error(
+        'VIEW_CODE có ký tự "#": phải đặt mã trong dấu ngoặc kép, ví dụ VIEW_CODE="Abc#2026".\n' +
+          'Không có ngoặc thì phần từ "#" trở đi bị coi là ghi chú và bị bỏ mất.',
+      );
+      process.exit(1);
+    }
+    process.loadEnvFile(envPath);
   }
-  const code = process.env.VIEW_CODE?.trim();
+  const code = normalizeViewCode(process.env.VIEW_CODE ?? "");
   if (!code) return null;
   if ([...code].length < MIN_CODE_LENGTH) {
     console.error(

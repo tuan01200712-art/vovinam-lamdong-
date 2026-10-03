@@ -1,13 +1,18 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { Eye, EyeOff, IdCard, LoaderCircle, ShieldCheck } from "lucide-react";
 
 import { FieldList, SectionHeading, type Field } from "@/components/field-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isMasked } from "@/lib/privacy";
-import { CryptoUnavailableError, openSecret, type SecretValues } from "@/lib/secret";
+import {
+  CryptoUnavailableError,
+  normalizeViewCode,
+  openSecret,
+  type SecretValues,
+} from "@/lib/secret";
 import type { PrivateField } from "@/lib/site";
 import type { SecretBlob } from "@/lib/types";
 
@@ -59,6 +64,8 @@ export function RecordSection({
   const [remember, setRemember] = useState(false);
   const [remembered, setRemembered] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
+  const eyeRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function unlock(candidate: string, fromStorage: boolean): Promise<boolean> {
     if (!secret) return false;
@@ -69,16 +76,19 @@ export function RecordSection({
       setAsking(false);
       setCode("");
       setStatus("idle");
-      if (remember && !fromStorage) storage.set(candidate);
+      if (remember && !fromStorage) storage.set(normalizeViewCode(candidate));
       setRemembered(fromStorage || remember);
+      eyeRef.current?.focus(); // ô nhập biến mất: đưa focus về nút "Ẩn" thay vì rơi về đầu trang
       return true;
     } catch (e) {
       setStatus(e instanceof CryptoUnavailableError ? "unsupported" : "wrong");
+      if (!fromStorage) requestAnimationFrame(() => inputRef.current?.select());
       return false;
     }
   }
 
   async function toggle() {
+    if (status === "busy") return;
     if (visible) return setVisible(false);
     if (values) return setVisible(true);
     if (asking) return setAsking(false);
@@ -92,7 +102,7 @@ export function RecordSection({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (code) void unlock(code, false);
+    if (code && status !== "busy") void unlock(code, false);
   }
 
   const fields: Field[] = rows.map(({ label, value, field }) => [
@@ -107,11 +117,12 @@ export function RecordSection({
         <SectionHeading icon={IdCard}>Hồ sơ môn sinh</SectionHeading>
         {secret && (
           <Button
+            ref={eyeRef}
             type="button"
             variant="outline"
             size="sm"
             onClick={toggle}
-            disabled={status === "busy"}
+            aria-disabled={status === "busy" || undefined}
             aria-pressed={visible}
             aria-expanded={asking}
             aria-controls={asking ? `${inputId}-form` : undefined}
@@ -139,10 +150,12 @@ export function RecordSection({
           </label>
           <div className="flex gap-2">
             <Input
+              ref={inputRef}
               id={inputId}
               type="password"
               autoComplete="off"
               autoFocus
+              readOnly={status === "busy"}
               value={code}
               onChange={(e) => {
                 setCode(e.target.value);
@@ -152,7 +165,12 @@ export function RecordSection({
               aria-describedby={`${inputId}-hint`}
               className="bg-background"
             />
-            <Button type="submit" disabled={!code || status === "busy"} className="shrink-0">
+            <Button
+              type="submit"
+              disabled={!code}
+              aria-disabled={status === "busy" || undefined}
+              className="shrink-0"
+            >
               {status === "busy" && <LoaderCircle className="animate-spin" />}
               Mở
             </Button>
