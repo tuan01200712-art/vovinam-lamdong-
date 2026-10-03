@@ -1,6 +1,92 @@
 {
-  "generatedAt": "2026-10-03T10:55:22.810Z",
+  "generatedAt": "2026-10-03T11:13:16.739Z",
   "students": [
+    {
+      "slug": "r4qbyznvv3",
+      "cardNo": "347.26/TĐC",
+      "fullName": "BÌNH NHẬT MINH",
+      "birthYear": 2018,
+      "unit": "Liên Hương",
+      "club": "CLB Vovinam-Việt võ đạo Khu phố 8",
+      "photo": "/photos/r4qbyznvv3.webp?v=fb96202d",
+      "ranks": [
+        {
+          "name": "Lam đai",
+          "color": "blue",
+          "stripes": 0,
+          "examDate": "20/09/2026",
+          "decisionNo": null,
+          "examiners": [],
+          "plan": null,
+          "testDate": "20/09/2026",
+          "testPlace": "Địa điểm sinh hoạt thôn 3",
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": "Lê Nguyện Hùng Quân"
+        },
+        {
+          "name": "Lam đai I cấp",
+          "color": "blue",
+          "stripes": 1,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
+        },
+        {
+          "name": "Lam đai II cấp",
+          "color": "blue",
+          "stripes": 2,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
+        },
+        {
+          "name": "Lam đai III cấp",
+          "color": "blue",
+          "stripes": 3,
+          "examDate": null,
+          "decisionNo": null,
+          "examiners": [],
+          "plan": null,
+          "testDate": null,
+          "testPlace": null,
+          "examinerDecision": null,
+          "recognitionDecision": null,
+          "coach": null
+        }
+      ],
+      "trainingSince": null,
+      "bloodType": "A",
+      "address": null,
+      "idNumber": "••••••••",
+      "phone": "•••",
+      "achievements": [],
+      "secret": {
+        "alg": "PBKDF2-SHA256/AES-256-GCM",
+        "iter": 600000,
+        "salt": "Jz3V/xtvbzTBCQ2maahyDQ==",
+        "iv": "YjeiFOTYRObARVaR",
+        "data": "s/TBlJr/d0WJrnhohVwxF34iqtLO/adzrxi5uSMImvDCYGYcDW3jwJWxcpljXMjg5uKl8aw="
+      },
+      "issuedAt": "Lâm Đồng, năm 2026",
+      "signer": {
+        "onBehalfOf": "TM. BAN CHẤP HÀNH",
+        "role": "CHỦ TỊCH",
+        "name": "Đức Hoàng Trên"
+      }
+    },
     {
       "slug": "93nrs6gwqs",
       "cardNo": "335.26/TĐC",
