@@ -8,7 +8,8 @@ import path from "node:path";
 import sharp from "sharp";
 
 import { publicValue } from "../lib/privacy";
-import { site } from "../lib/site";
+import type { SecretValues } from "../lib/secret";
+import { site, type PrivateField } from "../lib/site";
 import { currentRank, isAchieved, type Rank, type Student, type StudentsFile } from "../lib/types";
 import { parseCard, type ParsedCard } from "./lib/parse-card";
 import {
@@ -24,6 +25,7 @@ import {
   writeJson,
   type InputFile,
 } from "./lib/paths";
+import { MIN_CODE_LENGTH, deriveSealKey, seal, type SealKey } from "./lib/seal";
 import { escapeHtml } from "./lib/text";
 
 // Bỏ 0/o, 1/i/l cho khỏi đọc nhầm. 31^10 tổ hợp: không thể dò ra link của người khác.
@@ -39,6 +41,7 @@ type Row = {
 };
 
 async function main() {
+  const viewCode = readViewCode();
   const legacy = await listLegacyXls();
   if (legacy.length) {
     console.warn(`⚠ Bỏ qua ${legacy.length} file .xls đời cũ (mở bằng Excel → Lưu thành .xlsx): ${legacy.join(", ")}`);
@@ -125,7 +128,9 @@ async function main() {
     if (name.endsWith(".webp") && !keep.has(name)) await fs.rm(path.join(PHOTOS_DIR, name));
   }
 
-  const students = rows.map(toStudent);
+  // Dẫn xuất khoá một lần (PBKDF2 cố ý chậm), dùng chung cho mọi thẻ trong lượt import này.
+  const sealKey = viewCode ? deriveSealKey(viewCode) : null;
+  const students = rows.map((r) => toStudent(r, sealKey));
   await writeJson(STUDENTS_JSON, { generatedAt: now, students } satisfies StudentsFile);
   await writeJson(REGISTRY_JSON, registry);
 
@@ -146,6 +151,14 @@ async function main() {
         `\n  Nếu chỉ là đổi tên file, hãy đặt lại tên cũ để giữ nguyên link QR.`,
     );
   }
+  const lockable = rows.filter(hasMaskedRaw).length;
+  const sealed = students.filter((s) => s.secret).length;
+  if (sealed) console.log(`\n🔒 ${sealed} thẻ có nút xem đầy đủ (cần mã xem VIEW_CODE).`);
+  else if (lockable) {
+    console.warn(
+      `\n⚠ Chưa đặt VIEW_CODE trong .env: ${lockable} thẻ chỉ hiện bản đã che, chưa có nút con mắt để xem đầy đủ.`,
+    );
+  }
   console.log(
     `\n✔ Đã import ${rows.length} học viên (${added} mới) · có ảnh: ${rows.filter((r) => r.photo).length}/${rows.length}` +
       ` · file có cảnh báo: ${withWarnings.length}` +
@@ -155,7 +168,7 @@ async function main() {
   );
 }
 
-function toStudent(r: Row): Student {
+function toStudent(r: Row, sealKey: SealKey | null): Student {
   const address = publicValue("address", r.card.personal.address);
   if (site.privacy.address === "mask" && r.card.personal.address && address === "•••") {
     r.warnings.push("Thường trú: không nhận ra xã/phường, tỉnh nên đã che toàn bộ");
@@ -177,9 +190,38 @@ function toStudent(r: Row): Student {
     idNumber: publicValue("idNumber", r.card.personal.idNumber),
     phone: publicValue("phone", r.card.personal.phone),
     achievements: r.card.achievements,
+    secret: sealSecret(r, sealKey),
     issuedAt: r.card.issuedAt,
     signer: r.card.signer,
   };
+}
+
+/** Giá trị gốc của các trường đang "mask", mã hoá bằng mã xem để trang mở được khi nhập đúng mã. */
+function sealSecret(r: Row, sealKey: SealKey | null) {
+  const values: SecretValues = {};
+  for (const field of Object.keys(site.privacy) as PrivateField[]) {
+    const raw = r.card.personal[field];
+    if (site.privacy[field] === "mask" && raw) values[field] = raw;
+  }
+  return sealKey && Object.keys(values).length ? seal(sealKey, r.slug, values) : null;
+}
+
+function readViewCode(): string | null {
+  try {
+    process.loadEnvFile(path.join(ROOT, ".env"));
+  } catch {
+    // Không có file .env: dùng biến môi trường sẵn có.
+  }
+  const code = process.env.VIEW_CODE?.trim();
+  if (!code) return null;
+  if ([...code].length < MIN_CODE_LENGTH) {
+    console.error(
+      `VIEW_CODE phải dài ít nhất ${MIN_CODE_LENGTH} ký tự. Bản mã nằm công khai trong trang, mã ngắn sẽ bị dò ra.`,
+    );
+    process.exit(1);
+  }
+  if (/^\d+$/.test(code)) console.warn("⚠ VIEW_CODE toàn chữ số, dễ bị dò. Nên trộn cả chữ và số.");
+  return code;
 }
 
 function newSlug(used: Set<string>): string {
@@ -210,6 +252,10 @@ function flagDuplicates(
   }
 }
 
+const hasMaskedRaw = (r: Row) =>
+  (Object.keys(site.privacy) as PrivateField[]).some(
+    (f) => site.privacy[f] === "mask" && r.card.personal[f],
+  );
 const sha256 = (buf: Buffer) => crypto.createHash("sha256").update(buf).digest("hex");
 const rel = (p: string) => path.relative(ROOT, p) || ".";
 
@@ -265,6 +311,7 @@ function renderReport(rows: Row[], students: Student[], missing: string[], gener
           ["Thường trú", s.address],
           ["CCCD", s.idNumber],
           ["Điện thoại", s.phone],
+          ["Nút xem đầy đủ", s.secret ? "có (cần mã xem)" : "không"],
         ])}
         <ul class="ranks">${s.ranks.map(rankLine).join("")}</ul>
         <p class="ach">Thành tích: ${s.achievements.length ? escapeHtml(s.achievements.join(" | ")) : "chưa có"}</p>

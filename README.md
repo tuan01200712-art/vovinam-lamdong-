@@ -96,6 +96,21 @@ Ai cầm thẻ (hoặc ảnh chụp thẻ) đều mở được trang, và phầ
 Đổi thành `"show"` để hiện đầy đủ, hoặc `"hide"` để không đưa lên web. Với `mask`/`hide`, giá trị gốc
 **không bao giờ** được ghi vào `data/students.json`. Đổi cấu hình xong phải chạy lại `npm run import`.
 
+### Con mắt 👁: xem đầy đủ bằng mã xem
+
+Đặt `VIEW_CODE` trong `.env` (ít nhất 8 ký tự, nên trộn chữ và số), rồi chạy `npm run import`.
+Mục "Hồ sơ môn sinh" sẽ có nút **Xem đầy đủ**: bấm vào, nhập mã xem, các trường đang che hiện đầy đủ;
+bấm **Ẩn** để che lại. Có tuỳ chọn "Nhớ mã trên máy này" cho HLV phải quét nhiều thẻ.
+
+- Giá trị gốc được **mã hoá** lúc import (PBKDF2-SHA256 600.000 vòng + AES-256-GCM). Trang chỉ chứa bản mã,
+  trình duyệt giải mã tại chỗ khi nhập đúng mã. Người chỉ quét QR không xem được, kể cả khi mở mã nguồn trang.
+- Bản mã nằm công khai trong trang nên **mã xem phải khó đoán**. Mã ngắn hoặc phổ biến có thể bị dò ra.
+- **Đổi mã** (ví dụ khi có người nghỉ): sửa `VIEW_CODE`, chạy lại `npm run import`, rồi deploy. Mã cũ hết tác dụng.
+- Không đặt `VIEW_CODE` thì trang chỉ hiện bản đã che, không có nút con mắt.
+- Trang phải mở bằng `https://` (Vercel mặc định đã có) thì trình duyệt mới giải mã được.
+
+Thẻ demo `/hv/demo/` có mã xem là `xemthu2026`.
+
 ## Deploy
 
 - **Vercel**: import repo, giữ cấu hình mặc định, rồi gắn tên miền riêng (Settings → Domains).
@@ -110,6 +125,8 @@ nhiên 10 ký tự nên không dò được thẻ của người khác.
 app/hv/[slug]/page.tsx     trang thẻ điện tử (tạo sẵn lúc build cho từng học viên)
 components/student-card.tsx  bố cục thẻ (mobile một cột, máy tính hai cột)
 components/rank-list.tsx     các cấp đai dạng xổ xuống
+components/record-section.tsx hồ sơ môn sinh + con mắt (giải mã bằng mã xem)
+lib/secret.ts                giải mã trên trình duyệt · scripts/lib/seal.ts: mã hoá lúc import
 lib/site.ts                  chữ cố định trên thẻ + cấu hình che thông tin cá nhân
 scripts/import.ts          Excel → JSON + ảnh
 scripts/qr.ts              tạo QR, chèn vào bản sao file Excel

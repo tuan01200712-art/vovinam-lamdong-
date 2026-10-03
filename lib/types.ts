@@ -63,10 +63,25 @@ export type Student = {
   phone: string | null;
   achievements: string[];
 
+  /**
+   * Giá trị đầy đủ của các trường đang bị che, đã mã hoá bằng mã xem (VIEW_CODE).
+   * Trang chỉ giải mã được trên trình duyệt khi người xem nhập đúng mã. null nếu không có gì để mở.
+   */
+  secret: SecretBlob | null;
+
   // --- Khối ký trên mặt thẻ ---
   /** "Lâm Đồng, ngày 12 tháng 9 năm 2026", hoặc "Lâm Đồng, năm 2026" nếu chưa điền ngày. */
   issuedAt: string | null;
   signer: Signer | null;
+};
+
+/** PBKDF2-SHA256 → AES-256-GCM. Các trường nhị phân mã hoá base64; `data` = bản mã + tag 16 byte. */
+export type SecretBlob = {
+  alg: "PBKDF2-SHA256/AES-256-GCM";
+  iter: number;
+  salt: string;
+  iv: string;
+  data: string;
 };
 
 export type StudentsFile = {
